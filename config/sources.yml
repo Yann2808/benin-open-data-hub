@@ -1,0 +1,94 @@
+# Configuration des sources du Bénin Open Data Hub.
+# Modifie ce fichier pour ajouter des indicateurs ou des pays de comparaison :
+# aucune autre modification de code n'est nécessaire.
+
+worldbank:
+  base_url: https://api.worldbank.org/v2
+  # Pays de référence + pays de comparaison (codes ISO3)
+  focus_country: BEN
+  peer_countries: [TGO, NGA, BFA, NER, CIV, SEN]
+  start_year: 2000
+  end_year: 2025
+  # Indicateurs World Bank (WDI). theme sert au regroupement dans le dashboard.
+  # higher_is_better sert au classement Bénin vs pairs (null = pas de classement).
+  indicators:
+    - code: SP.POP.TOTL
+      label: Population totale
+      theme: Démographie
+      unit: habitants
+      higher_is_better: null
+    - code: SP.URB.TOTL.IN.ZS
+      label: Population urbaine
+      theme: Démographie
+      unit: "% de la population"
+      higher_is_better: null
+    - code: SP.DYN.LE00.IN
+      label: Espérance de vie à la naissance
+      theme: Santé
+      unit: années
+      higher_is_better: true
+    - code: NY.GDP.MKTP.CD
+      label: PIB
+      theme: Économie
+      unit: USD courants
+      higher_is_better: true
+    - code: NY.GDP.PCAP.CD
+      label: PIB par habitant
+      theme: Économie
+      unit: USD courants
+      higher_is_better: true
+    - code: NY.GDP.MKTP.KD.ZG
+      label: Croissance du PIB
+      theme: Économie
+      unit: "% annuel"
+      higher_is_better: true
+    - code: FP.CPI.TOTL.ZG
+      label: Inflation (prix à la consommation)
+      theme: Économie
+      unit: "% annuel"
+      higher_is_better: false
+    - code: IT.NET.USER.ZS
+      label: Utilisateurs d'Internet
+      theme: Numérique
+      unit: "% de la population"
+      higher_is_better: true
+    - code: IT.CEL.SETS.P2
+      label: Abonnements mobiles
+      theme: Numérique
+      unit: pour 100 habitants
+      higher_is_better: true
+    - code: EG.ELC.ACCS.ZS
+      label: Accès à l'électricité
+      theme: Infrastructures
+      unit: "% de la population"
+      higher_is_better: true
+    - code: SE.PRM.ENRR
+      label: Taux brut de scolarisation primaire
+      theme: Éducation
+      unit: "% brut"
+      higher_is_better: true
+    - code: SL.UEM.TOTL.ZS
+      label: Chômage (estimation OIT)
+      theme: Emploi
+      unit: "% de la population active"
+      higher_is_better: false
+
+nada:
+  # Catalogue de microdonnées de l'INStaD (plateforme NADA).
+  # On ne collecte que les métadonnées du catalogue (enquêtes, années, producteurs).
+  # Source optionnelle : si elle est indisponible, le reste du pipeline continue.
+  site_root: https://nada.instad.bj
+  page_size: 100
+
+manual:
+  # data.gouv.bj n'autorise pas l'accès automatisé (robots.txt) :
+  # les fichiers sont téléchargés à la main puis déposés dans data/manual/.
+  # Chaque fichier doit être déclaré ici pour être chargé.
+  folder: data/manual
+  datasets: []
+  # Exemple :
+  # - file: effectifs_ecoles_2024.csv
+  #   table: datagouvbj_effectifs_ecoles
+  #   source_url: https://data.gouv.bj/...
+  #   producer: Ministère des Enseignements Maternel et Primaire
+  #   downloaded_on: 2026-10-11

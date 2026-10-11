@@ -1,0 +1,61 @@
+name: refresh
+
+# Tests à chaque push, et rafraîchissement hebdomadaire des vraies données.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"   # chaque lundi à 05:17 UTC
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Pipeline de démo + tests
+        run: |
+          make demo
+          python -m pytest -q
+
+  refresh:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Collecte des vraies sources
+        # Une source en panne est signalée mais n'empêche pas de publier les autres.
+        run: python -m ingestion.run || echo "::warning::Au moins une source en échec, voir les logs de collecte"
+      - name: Transformations et tests de qualité
+        run: cd transform && dbt build --profiles-dir .
+      - name: Export des marts en Parquet (versionnés, lus par le dashboard hébergé)
+        run: |
+          mkdir -p exports
+          python - <<'EOF'
+          import duckdb
+          con = duckdb.connect("warehouse/benin.duckdb", read_only=True)
+          for t in ["dim_country", "dim_indicator", "fct_indicator_values",
+                    "mart_latest_values", "mart_benin_scorecard", "mart_data_catalog"]:
+              con.execute(f"copy marts.{t} to 'exports/{t}.parquet' (format parquet)")
+          EOF
+      - name: Commit des exports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add exports
+          git diff --cached --quiet || git commit -m "data: rafraîchissement hebdomadaire $(date -u +%F)"
+          git push

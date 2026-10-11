@@ -1,0 +1,13 @@
+benin_open_data_hub:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Chemin relatif au dossier transform/ (là où dbt est lancé)
+      path: "{{ env_var('BODH_WAREHOUSE', '../warehouse/benin.duckdb') }}"
+      # Volumes faibles : on reste sobre en mémoire et en threads pour tourner
+      # sur n'importe quel portable.
+      threads: 2
+      settings:
+        memory_limit: "1GB"
+        threads: 2

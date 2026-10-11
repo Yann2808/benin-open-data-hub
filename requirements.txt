@@ -1,0 +1,13 @@
+duckdb>=1.1,<2
+dbt-duckdb>=1.9,<2
+requests>=2.31
+pyyaml>=6
+pandas>=2.2
+streamlit>=1.38
+plotly>=5.22
+pytest>=8
+
+# Mac Intel : depuis la 18, pyarrow (dépendance de Streamlit) n'est publié en
+# version précompilée que pour macOS 12+. Sur un Mac Intel plus ancien, pip
+# tente de le compiler et échoue (Rust manquant). La 17 couvre macOS 10.15+.
+pyarrow>=14,<18 ; sys_platform == "darwin" and platform_machine == "x86_64"

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+warehouse/*.duckdb
+warehouse/*.duckdb.wal
+transform/target/
+transform/logs/
+transform/dbt_packages/
+logs/
+data/raw/
+tests/fixtures/worldbank_normalized.json
+tests/fixtures/nada_normalized.json
+.DS_Store
+.user.yml

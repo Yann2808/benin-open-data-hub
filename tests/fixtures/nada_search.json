@@ -1,0 +1,12 @@
+{
+  "result": {
+    "found": 2,
+    "total": 2,
+    "limit": 100,
+    "offset": 0,
+    "rows": [
+      {"id": 65, "idno": "BEN-INS-EMB-2024-V1.0", "title": "Enquête sur la Migration au Bénin 2024", "nation": "Bénin", "year_start": 2024, "year_end": 2024, "repositoryid": "central", "data_access_type": "licensed", "created": "2025-04-08", "changed": "2025-04-16"},
+      {"id": 12, "idno": "BEN-TEST", "title": "Étude test", "nation": "Bénin", "year_start": "", "year_end": null, "repositoryid": "central", "form_model": "public"}
+    ]
+  }
+}

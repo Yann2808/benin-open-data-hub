@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Tables brutes chargées par `python -m ingestion.run` (toutes les colonnes en texte).
+    tables:
+      - name: wb_observations
+        description: Observations World Bank (API v2), une ligne par indicateur × pays × année.
+      - name: wb_indicator_catalog
+        description: Métadonnées métier des indicateurs, issues de config/sources.yml.
+      - name: nada_studies
+        description: Catalogue des enquêtes de l'INStaD (plateforme NADA), métadonnées seulement.
+      - name: manual_registry
+        description: Registre des fichiers déposés à la main (data.gouv.bj, etc.) et de leur provenance.

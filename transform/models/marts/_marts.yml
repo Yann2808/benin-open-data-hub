@@ -1,0 +1,75 @@
+version: 2
+
+models:
+  - name: dim_country
+    description: Pays présents dans les données, libellés FR, drapeau du pays focus.
+    columns:
+      - name: country_iso3
+        data_tests: [unique, not_null]
+      - name: is_focus
+        data_tests: [not_null]
+
+  - name: dim_indicator
+    description: Indicateurs suivis, avec libellé FR, thème, unité et sens de lecture.
+    columns:
+      - name: indicator_code
+        data_tests: [unique, not_null]
+      - name: label_fr
+        data_tests: [not_null]
+      - name: theme
+        data_tests: [not_null]
+
+  - name: fct_indicator_values
+    description: Une ligne par indicateur × pays × année (valeurs renseignées uniquement).
+    columns:
+      - name: observation_id
+        data_tests: [unique, not_null]
+      - name: value
+        data_tests: [not_null]
+      - name: indicator_code
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_indicator')
+                field: indicator_code
+      - name: country_iso3
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: country_iso3
+
+  - name: mart_latest_values
+    description: Dernière valeur par indicateur × pays et évolution sur `trend_years` ans.
+    columns:
+      - name: latest_id
+        data_tests: [unique, not_null]
+
+  - name: mart_benin_scorecard
+    description: >
+      Bénin face à ses pairs : dernière valeur, évolution, médiane des pairs, rang.
+      Une ligne par indicateur suivi, même si la donnée manque (position = « données insuffisantes »).
+    columns:
+      - name: indicator_code
+        data_tests: [unique, not_null]
+      - name: position_vs_peers
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - mieux que la médiane des pairs
+                  - moins bien que la médiane des pairs
+                  - au-dessus de la médiane
+                  - en dessous de la médiane
+                  - données insuffisantes
+
+  - name: mart_data_catalog
+    description: Catalogue unifié des données connues sur le Bénin (indicateurs, enquêtes INStaD, fichiers déposés).
+    columns:
+      - name: kind
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [indicateur, enquête, fichier déposé]
+      - name: title
+        data_tests: [not_null]
