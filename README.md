@@ -73,6 +73,10 @@ make docs   # documentation dbt et lignage
 - [ ] v0.3 : API publique en lecture (exports Parquet + DuckDB-WASM ou FastAPI)
 - [ ] v1 : fiche « qualité des données » par source (fraîcheur, complétude, trous)
 
+## Méthode de travail
+
+Développé avec l'aide de [Claude Code](https://claude.com/claude-code) (Anthropic) pour l'écriture du code et des tests ; choix techniques, sources et vérification des données par Yann. Les commits concernés portent la mention `Co-Authored-By: Claude`.
+
 ## Licence
 
 Code sous licence MIT. Les données restent sous la licence de leurs producteurs (World Bank : CC BY 4.0).
