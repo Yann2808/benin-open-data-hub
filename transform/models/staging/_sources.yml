@@ -12,3 +12,9 @@ sources:
         description: Catalogue des enquêtes de l'INStaD (plateforme NADA), métadonnées seulement.
       - name: manual_registry
         description: Registre des fichiers déposés à la main (data.gouv.bj, etc.) et de leur provenance.
+      - name: odfa_datasets
+        description: Catalogue du portail Open Data for Africa — Bénin (API Knoema /api/1.0/meta/dataset).
+      - name: odfa_fetch_log
+        description: Journal de collecte par jeu de données (statut, lignes, erreur), cumulé entre exécutions.
+      - name: odfa_observations
+        description: Valeurs collectées sur Open Data for Africa, une ligne par série × date.

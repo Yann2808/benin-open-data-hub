@@ -1,0 +1,19 @@
+# Thème du dashboard : vert du Bénin en couleur principale, fond légèrement chaud.
+# Thème clair imposé : les couleurs des graphiques ont été vérifiées sur fond clair.
+[theme]
+base = "light"
+primaryColor = "#0F7B4B"
+backgroundColor = "#FAFAF7"
+secondaryBackgroundColor = "#F0F2EC"
+textColor = "#1F2328"
+borderColor = "#E3E5DF"
+linkColor = "#0F7B4B"
+baseRadius = "0.6rem"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Space Grotesk:https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap"
+headingFontWeights = [700, 600, 600, 600, 600, 600]
+metricValueFontWeight = 600
+showWidgetBorder = true
+
+[client]
+toolbarMode = "minimal"

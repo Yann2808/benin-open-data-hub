@@ -10,15 +10,17 @@ Les grands indicateurs du Bénin, comparés à ses voisins d'Afrique de l'Ouest,
 |---|---|
 | **Tableau de bord** | 12 indicateurs (démographie, économie, numérique, énergie, éducation, emploi, santé) : dernière valeur, évolution sur 5 ans, rang et position face à la médiane de 6 pays voisins |
 | **Comparer** | Séries temporelles du Bénin face à ses pairs, indicateur par indicateur |
-| **Catalogue** | Tout ce que le hub connaît : indicateurs, enquêtes de l'INStaD, fichiers data.gouv.bj déposés, avec source, période et lien |
+| **Catalogue** | Tout ce que le hub connaît : indicateurs, enquêtes de l'INStaD, jeux du portail Open Data for Africa (BAD), fichiers data.gouv.bj déposés, avec source, période, licence et lien |
 
 ## Architecture
 
 ```
 World Bank API ─┐
 INStaD (NADA) ──┼─► ingestion/ (Python) ─► DuckDB raw.* ─► dbt (staging → marts + tests) ─► Streamlit
-data.gouv.bj ───┘   retries, snapshots       warehouse/       32 tests de qualité              app/
- (dépôt manuel)      JSONL horodatés
+Open Data       │   retries, snapshots       warehouse/       38 tests de qualité              app/
+ for Africa ─────┤   JSONL / Parquet
+data.gouv.bj ───┘
+ (dépôt manuel)
 ```
 
 - **Ingestion** (`ingestion/`) : une source en panne ne bloque pas les autres. Chaque collecte est gardée en JSONL horodaté dans `data/raw/` pour pouvoir rejouer les transformations.
@@ -37,6 +39,7 @@ make demo   # pipeline complet sur données SYNTHÉTIQUES, sans réseau
 make run    # pipeline complet sur les vraies sources
 make app    # dashboard sur http://localhost:8501
 make test   # tests Python + tests dbt
+make odfa   # collecte complète d'Open Data for Africa (longue, reprend où elle s'est arrêtée)
 make docs   # documentation dbt et lignage
 ```
 
@@ -64,7 +67,8 @@ make docs   # documentation dbt et lignage
 ## Feuille de route
 
 - [x] v0 : World Bank + catalogue INStaD + dépôt manuel, scorecard, catalogue, CI
-- [ ] v0.1 : premiers jeux de données data.gouv.bj (éducation, santé) et carte par commune
+- [x] v0.1 : collecte complète du portail Open Data for Africa — Bénin (API Knoema), inventaire avec fraîcheur et licences
+- [ ] v0.2 : premiers jeux de données data.gouv.bj (éducation, santé) et carte par commune
 - [ ] v0.2 : indicateurs propres au numérique béninois (ARCEP, ASIN) et à l'agriculture
 - [ ] v0.3 : API publique en lecture (exports Parquet + DuckDB-WASM ou FastAPI)
 - [ ] v1 : fiche « qualité des données » par source (fraîcheur, complétude, trous)

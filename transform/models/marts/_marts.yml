@@ -70,6 +70,19 @@ models:
         data_tests:
           - accepted_values:
               arguments:
-                values: [indicateur, enquête, fichier déposé]
+                values: [indicateur, enquête, fichier déposé, jeu de données]
       - name: title
         data_tests: [not_null]
+
+  - name: mart_odfa_datasets
+    description: >
+      Inventaire du portail Open Data for Africa — Bénin : source, licence, date de mise à jour,
+      années couvertes et statut de collecte de chaque jeu de données.
+    columns:
+      - name: dataset_id
+        data_tests: [unique, not_null]
+      - name: fetch_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [ok, échec, non collecté]

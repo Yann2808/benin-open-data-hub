@@ -3,9 +3,10 @@ dbt-duckdb>=1.9,<2
 requests>=2.31
 pyyaml>=6
 pandas>=2.2
-streamlit>=1.38
+streamlit>=1.50
 plotly>=5.22
 pytest>=8
+knoema>=1.3   # client officiel de l'API Knoema (Open Data for Africa)
 
 # Mac Intel : depuis la 18, pyarrow (dépendance de Streamlit) n'est publié en
 # version précompilée que pour macOS 12+. Sur un Mac Intel plus ancien, pip

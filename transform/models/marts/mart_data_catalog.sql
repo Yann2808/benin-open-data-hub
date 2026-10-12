@@ -44,3 +44,19 @@ select
     'ouvert',
     false
 from {{ ref('stg_manual_registry') }}
+
+union all
+
+select
+    'jeu de données',
+    'Open Data for Africa — ' || coalesce(d.source_name, 'source non précisée'),
+    d.title,
+    d.category,
+    min(o.year),
+    max(o.year),
+    d.url,
+    coalesce(d.license, 'licence non précisée'),
+    false
+from {{ ref('stg_odfa_datasets') }} d
+left join {{ ref('stg_odfa_observations') }} o using (dataset_id)
+group by all

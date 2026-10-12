@@ -3,6 +3,11 @@
     python -m ingestion.run              # collecte réelle (World Bank + INStaD + fichiers manuels)
     python -m ingestion.run --offline    # charge les jeux de test (démo sans réseau)
     python -m ingestion.run --only worldbank
+    python -m ingestion.run --only odfa  # collecte complète d'Open Data for Africa (longue, reprend où elle s'est arrêtée)
+    python -m ingestion.run --only odfa --refresh   # recollecte aussi les jeux déjà présents
+
+Sans --only odfa, seul le catalogue Open Data for Africa est rafraîchi (rapide) ;
+les données déjà collectées sont rechargées depuis data/raw/odfa/.
 """
 from __future__ import annotations
 
@@ -12,17 +17,23 @@ import logging
 import sys
 from pathlib import Path
 
-from . import manual, nada, worldbank
-from .common import ROOT, ensure_raw_table, load_config, load_raw_table, write_snapshot
+from . import manual, nada, odfa, worldbank
+from .common import ROOT, drop_demo_rows, ensure_raw_table, load_config, load_raw_table, upsert_raw_table, write_snapshot
 
 FIXTURES = ROOT / "tests" / "fixtures"
-SOURCES = ("worldbank", "nada", "manual")
+# Marqueurs des données synthétiques de `make demo` (voir tests/fixtures/make_fixtures.py)
+DEMO_MARKERS = {
+    "wb_observations": ("source_last_updated", "DEMO-SYNTHETIQUE"),
+    "nada_studies": ("idno", "DEMO-"),
+}
+SOURCES = ("worldbank", "nada", "manual", "odfa")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bénin Open Data Hub — ingestion")
     parser.add_argument("--offline", action="store_true", help="utiliser les fixtures de test au lieu des API")
     parser.add_argument("--only", choices=SOURCES, action="append", help="limiter à certaines sources")
+    parser.add_argument("--refresh", action="store_true", help="odfa : recollecter aussi les jeux déjà présents")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
     log = logging.getLogger("ingestion")
@@ -36,6 +47,16 @@ def main(argv: list[str] | None = None) -> int:
     ensure_raw_table("wb_observations", worldbank.COLUMNS)
     ensure_raw_table("nada_studies", nada.COLUMNS)
     ensure_raw_table("manual_registry", manual.REGISTRY_COLUMNS)
+    ensure_raw_table("odfa_datasets", odfa.DATASET_COLUMNS)
+    ensure_raw_table("odfa_fetch_log", odfa.LOG_COLUMNS)
+
+    # Collecte réelle : on retire d'abord les restes d'un `make demo`, pour que
+    # « dernière collecte conservée » ne mélange jamais démo et vraies données.
+    if not args.offline:
+        for table, (column, marker) in DEMO_MARKERS.items():
+            n = drop_demo_rows(table, column, marker)
+            if n:
+                log.info("raw.%s : %s lignes de démo supprimées", table, n)
 
     # Le catalogue des indicateurs vient de la config : toujours rechargé.
     load_raw_table("wb_indicator_catalog", worldbank.indicator_catalog(cfg["worldbank"]), worldbank.CATALOG_COLUMNS)
@@ -69,11 +90,35 @@ def main(argv: list[str] | None = None) -> int:
         entries = manual.load_all(cfg["manual"])
         load_raw_table("manual_registry", entries, manual.REGISTRY_COLUMNS)
 
+    if "odfa" in selected and not args.offline:
+        _run_odfa(cfg["odfa"], collect_data=bool(args.only and "odfa" in args.only), refresh=args.refresh, log=log)
+    if not args.offline:
+        log.info("raw.odfa_observations : %s lignes", odfa.load_observations())
+    else:
+        odfa.load_observations(FIXTURES / "odfa_empty")  # table vide en démo
+
     # Seule la World Bank est indispensable : sans elle, le dashboard serait vide.
     if failures:
         log.error("Source indispensable en échec : %s", ", ".join(failures))
         return 1
     return 0
+
+
+def _run_odfa(cfg: dict, collect_data: bool, refresh: bool, log: logging.Logger) -> None:
+    """Source optionnelle : une panne est signalée sans arrêter le pipeline."""
+    try:
+        datasets = odfa.list_datasets(cfg)
+        load_raw_table("odfa_datasets", datasets, odfa.DATASET_COLUMNS)
+    except Exception as err:  # noqa: BLE001
+        log.warning("Catalogue Open Data for Africa indisponible : %s — dernière collecte conservée", err)
+        return
+    if not collect_data:
+        log.info("Catalogue Open Data for Africa à jour. Collecte des données : make odfa")
+        return
+    journal = odfa.fetch_datasets(odfa.select_datasets(datasets, cfg), cfg, refresh=refresh)
+    upsert_raw_table("odfa_fetch_log", journal, odfa.LOG_COLUMNS, key="dataset_id")
+    ok = sum(j["status"] == "ok" for j in journal)
+    log.info("Open Data for Africa : %s jeux collectés, %s en échec", ok, len(journal) - ok)
 
 
 def _offline(source: str) -> list[dict]:

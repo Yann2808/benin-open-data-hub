@@ -146,6 +146,18 @@ def test_load_raw_table_replaces_content(tmp_warehouse):
     assert con.execute("select a from raw.t order by a").fetchall() == [("2",), ("3",)]
 
 
+def test_drop_demo_rows_keeps_real_rows(tmp_warehouse):
+    common.load_raw_table("nada_studies", [{"idno": "DEMO-001"}, {"idno": "BEN-2018-EDS"}, {"idno": None}],
+                          ["idno"])
+    assert common.drop_demo_rows("nada_studies", "idno", "DEMO-") == 1
+    con = duckdb.connect(str(tmp_warehouse))
+    assert con.execute("select idno from raw.nada_studies order by idno").fetchall() == [("BEN-2018-EDS",), (None,)]
+
+
+def test_drop_demo_rows_without_table_is_noop(tmp_warehouse):
+    assert common.drop_demo_rows("absente", "idno", "DEMO-") == 0
+
+
 def test_manual_loads_declared_csv(tmp_warehouse, tmp_path):
     (tmp_path / "manual").mkdir()
     (tmp_path / "manual" / "ecoles.csv").write_text("commune,effectif\nCotonou,120\nParakou,80\n", encoding="utf-8")

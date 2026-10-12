@@ -7,7 +7,7 @@ DBT  ?= $(if $(wildcard $(VENV)/bin/dbt),$(VENV)/bin/dbt,dbt)
 STREAMLIT ?= $(if $(wildcard $(VENV)/bin/streamlit),$(VENV)/bin/streamlit,streamlit)
 DBT_RUN = cd transform && $(DBT)
 
-.PHONY: venv install demo run ingest transform test app docs diagnose clean
+.PHONY: venv install demo run ingest odfa transform test app docs diagnose clean
 
 venv:               ## Crée l'environnement du projet (Python 3.10 à 3.12)
 	python3 -m venv .venv
@@ -26,6 +26,10 @@ run: ingest transform   ## Pipeline complet sur les vraies sources
 
 ingest:
 	$(PY) -m ingestion.run
+
+odfa:               ## Collecte complète Open Data for Africa (reprend où elle s'est arrêtée)
+	$(PY) -m ingestion.run --only odfa
+	$(DBT_RUN) build --profiles-dir .
 
 transform:
 	$(DBT_RUN) build --profiles-dir .
