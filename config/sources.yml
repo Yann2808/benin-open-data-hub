@@ -92,3 +92,15 @@ manual:
   #   source_url: https://data.gouv.bj/...
   #   producer: Ministère des Enseignements Maternel et Primaire
   #   downloaded_on: 2026-10-11
+
+odfa:
+  # Open Data for Africa — portail Bénin (plateforme Knoema, Banque africaine de développement).
+  # Collecte via l'API uniquement (robots.txt interdit /api/1.0/sdmx, jamais utilisé).
+  # `make run` rafraîchit le catalogue ; `make odfa` collecte les données (long, reprend où il s'est arrêté).
+  host: benin.opendataforafrica.org
+  pause_seconds: 2        # pause entre deux jeux de données
+  max_datasets: null      # ex. 5 pour un premier essai
+  include: []             # ids à collecter en priorité (vide = tous)
+  exclude: []             # ids à ignorer (ex. jeux trop lourds)
+  # Facultatif, pour relever les quotas d'appels : variables d'environnement
+  # ODFA_APP_ID et ODFA_APP_SECRET (créées sur https://benin.opendataforafrica.org/user/apps).

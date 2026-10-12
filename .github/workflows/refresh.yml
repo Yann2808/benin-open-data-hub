@@ -49,7 +49,8 @@ jobs:
           import duckdb
           con = duckdb.connect("warehouse/benin.duckdb", read_only=True)
           for t in ["dim_country", "dim_indicator", "fct_indicator_values",
-                    "mart_latest_values", "mart_benin_scorecard", "mart_data_catalog"]:
+                    "mart_latest_values", "mart_benin_scorecard", "mart_data_catalog",
+                    "mart_odfa_datasets"]:
               con.execute(f"copy marts.{t} to 'exports/{t}.parquet' (format parquet)")
           EOF
       - name: Commit des exports

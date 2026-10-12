@@ -96,6 +96,49 @@ def ensure_raw_table(table: str, columns: list[str]) -> None:
         con.close()
 
 
+def upsert_raw_table(table: str, records: list[dict[str, Any]], columns: list[str], key: str) -> int:
+    """Remplace dans raw.<table> les lignes dont la clé est présente dans records,
+    et garde les autres (ex. journal de collecte cumulé d'une exécution à l'autre)."""
+    import duckdb
+
+    ensure_raw_table(table, columns)
+    con = duckdb.connect(str(WAREHOUSE_PATH))
+    try:
+        keys = [r[key] for r in records]
+        if keys:
+            con.execute(f'delete from raw.{table} where "{key}" in (select unnest(?))', [keys])
+            placeholders = ", ".join("?" for _ in columns)
+            con.executemany(f"insert into raw.{table} values ({placeholders})",
+                            [tuple(r.get(c) for c in columns) for r in records])
+        return con.execute(f"select count(*) from raw.{table}").fetchone()[0]
+    finally:
+        con.close()
+
+
+def drop_demo_rows(table: str, column: str, marker: str) -> int:
+    """Supprime de raw.<table> les lignes de démo (valeur de `column` commençant
+    par `marker`). Appelé avant une collecte réelle : si la source échoue ensuite,
+    « la dernière collecte conservée » ne doit jamais être celle de `make demo`."""
+    import duckdb
+
+    if not WAREHOUSE_PATH.exists():
+        return 0
+    con = duckdb.connect(str(WAREHOUSE_PATH))
+    try:
+        found = con.execute(
+            "select count(*) from information_schema.tables where table_schema = 'raw' and table_name = ?",
+            [table],
+        ).fetchone()[0]
+        if not found:
+            return 0
+        n = con.execute(f'select count(*) from raw.{table} where starts_with("{column}", ?)', [marker]).fetchone()[0]
+        if n:
+            con.execute(f'delete from raw.{table} where starts_with("{column}", ?)', [marker])
+        return n
+    finally:
+        con.close()
+
+
 def load_raw_table(table: str, records: Iterable[dict[str, Any]], columns: list[str]) -> int:
     """Remplace raw.<table> par les enregistrements fournis (colonnes explicites,
     pour que le schéma ne dépende pas de ce que renvoie l'API un jour donné)."""

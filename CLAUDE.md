@@ -9,11 +9,14 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 - `ingestion/` (Python) → DuckDB `warehouse/benin.duckdb`, schéma `raw.*` (tout en varchar)
   - `worldbank.py` : API World Bank v2, 12 indicateurs × 7 pays × 2000-2025. **Source indispensable.**
   - `nada.py` : catalogue INStaD (nada.instad.bj). **Source optionnelle** : un échec ne bloque pas le pipeline.
+  - `odfa.py` : portail Open Data for Africa — Bénin (Knoema, BAD) via son API. `make run` rafraîchit le catalogue,
+    `make odfa` collecte tous les jeux (reprise : `data/raw/odfa/<id>.parquet`, `--refresh` pour tout recollecter).
+    robots.txt interdit `/api/1.0/sdmx` : ne jamais l'appeler. Licence de chaque jeu dans `mart_odfa_datasets`.
   - `manual.py` : fichiers data.gouv.bj déposés à la main dans `data/manual/` et déclarés dans `config/sources.yml`
     (data.gouv.bj interdit la collecte automatisée dans son robots.txt : ne jamais scraper).
   - `common.py` : HttpClient (retries sur 5xx/429/timeouts, pas sur 4xx), snapshots JSONL dans `data/raw/`.
 - `transform/` (dbt-duckdb) : staging (vues) → marts (tables) : dim_country, dim_indicator,
-  fct_indicator_values, mart_latest_values, mart_benin_scorecard, mart_data_catalog. 32 tests.
+  fct_indicator_values, mart_latest_values, mart_benin_scorecard, mart_data_catalog, mart_odfa_datasets. 38 tests.
 - `app/streamlit_app.py` : 4 onglets (Tableau de bord, Comparer, Catalogue, Méthode).
   Lit DuckDB en local, ou `exports/*.parquet` une fois hébergé.
 - `.github/workflows/refresh.yml` : tests à chaque push, collecte réelle chaque lundi, export Parquet commité.
