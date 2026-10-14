@@ -11,6 +11,8 @@ worldbank:
   end_year: 2025
   # Indicateurs World Bank (WDI). theme sert au regroupement dans le dashboard.
   # higher_is_better sert au classement Bénin vs pairs (null = pas de classement).
+  # section : « tableau de bord » (défaut) ou « investir » (onglet Investir au Bénin uniquement,
+  # disponible aussi dans Comparer).
   indicators:
     - code: SP.POP.TOTL
       label: Population totale
@@ -72,6 +74,77 @@ worldbank:
       theme: Emploi
       unit: "% de la population active"
       higher_is_better: false
+
+    # --- Investir au Bénin : marché, stabilité, climat des affaires --------------
+    # Écartés faute de données récentes pour la plupart des 7 pays (vérifié le 2026-10-14) :
+    # dette publique (GC.DOD.TOTL.GD.ZS), recettes fiscales (GC.TAX.TOTL.GD.ZS),
+    # taux d'intérêt débiteur (FR.INR.LEND).
+    - code: SP.POP.1564.TO.ZS
+      label: Population de 15 à 64 ans
+      theme: Démographie
+      unit: "% de la population"
+      higher_is_better: null
+      section: investir
+    - code: SL.TLF.TOTL.IN
+      label: Population active
+      theme: Emploi
+      unit: personnes
+      higher_is_better: null
+      section: investir
+    - code: NY.GDP.PCAP.PP.CD
+      label: PIB par habitant (PPA)
+      theme: Économie
+      unit: USD PPA courants
+      higher_is_better: true
+      section: investir
+    - code: NV.AGR.TOTL.ZS
+      label: Agriculture (valeur ajoutée)
+      theme: Économie
+      unit: "% du PIB"
+      higher_is_better: null
+      section: investir
+    - code: NV.IND.TOTL.ZS
+      label: Industrie (valeur ajoutée)
+      theme: Économie
+      unit: "% du PIB"
+      higher_is_better: null
+      section: investir
+    - code: NV.SRV.TOTL.ZS
+      label: Services (valeur ajoutée)
+      theme: Économie
+      unit: "% du PIB"
+      higher_is_better: null
+      section: investir
+    - code: PA.NUS.FCRF
+      label: Taux de change officiel
+      theme: Économie
+      unit: monnaie locale pour 1 USD
+      higher_is_better: null
+      section: investir
+    - code: FS.AST.PRVT.GD.ZS
+      label: Crédit au secteur privé
+      theme: Finance et investissement
+      unit: "% du PIB"
+      higher_is_better: true
+      section: investir
+    - code: BX.KLT.DINV.WD.GD.ZS
+      label: IDE, entrées nettes
+      theme: Finance et investissement
+      unit: "% du PIB"
+      higher_is_better: true
+      section: investir
+    - code: BX.KLT.DINV.CD.WD
+      label: IDE, montant
+      theme: Finance et investissement
+      unit: USD courants
+      higher_is_better: true
+      section: investir
+    - code: NE.TRD.GNFS.ZS
+      label: Ouverture commerciale
+      theme: Finance et investissement
+      unit: "% du PIB"
+      higher_is_better: null
+      section: investir
 
 nada:
   # Catalogue de microdonnées de l'INStaD (plateforme NADA).
