@@ -20,7 +20,10 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
     `drop_demo_rows` : une collecte réelle (`run.py` sans `--offline`) purge d'abord les lignes de démo.
 - `transform/` (dbt-duckdb) : staging (vues) → marts (tables) : dim_country, dim_indicator,
   fct_indicator_values, mart_latest_values, mart_benin_scorecard, mart_data_catalog, mart_odfa_datasets. 38 tests.
-- `app/streamlit_app.py` : 4 onglets (Tableau de bord, Comparer, Catalogue, Méthode).
+- `app/streamlit_app.py` : 6 onglets (Tableau de bord, Fiche pays, Comparer, Open Data for Africa, Catalogue, Méthode).
+  Fiche pays : `country_profile()` refait en pandas le calcul de `mart_benin_scorecard` pour n'importe quel pays
+  (à garder aligné avec le SQL) ; sélecteur lié à l'URL (`?pays=Togo`, libellé du pays).
+  `app/odfa_catalog.py` : titres ODFA lisibles depuis les slugs, thème estimé par mots-clés, famille de producteur.
   Lit DuckDB en local, ou `exports/*.parquet` une fois hébergé. Streamlit ≥ 1.50 (metrics avec sparklines, badges).
   Thème dans `.streamlit/config.toml` (vert Bénin `#0F7B4B`, Inter / Space Grotesk, clair imposé).
   Couleurs des pays attribuées par code ISO, jamais par rang : le Bénin en vert, chaque voisin sa couleur.

@@ -14,10 +14,14 @@ import plotly.graph_objects as go
 import streamlit as st
 import yaml
 
+import odfa_catalog
+
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE = Path(os.environ.get("BODH_WAREHOUSE", ROOT / "warehouse" / "benin.duckdb"))
 EXPORTS = ROOT / "exports"
 FOCUS = "BEN"
+REPO_URL = "https://github.com/Yann2808/benin-open-data-hub"
+ODFA_URL = "https://benin.opendataforafrica.org"
 FOCUS_COLOR = "#0F7B4B"   # vert
 NEUTRAL = "#B8BEC6"
 INK_MUTED = "#5B6169"
@@ -39,12 +43,21 @@ THEMES = {
 
 st.set_page_config(page_title="Bénin Open Data Hub", page_icon=":material/insights:", layout="wide")
 
-# Quelques styles que le thème (.streamlit/config.toml) ne couvre pas : bandeau
-# d'en-tête et listes « points forts / à surveiller ».
+# Quelques styles que le thème (.streamlit/config.toml) ne couvre pas : marge
+# haute, barre d'onglets, bandeau d'en-tête et listes « points forts / à surveiller ».
 st.html(
     """
 <style>
-.bodh-hero { padding: 0.25rem 0 0.75rem 0; }
+/* Marge haute par défaut (~6rem) trop large : l'en-tête remonte sous la barre Streamlit. */
+[data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
+[data-testid="stHeader"] { background: transparent; }
+/* Onglets : barre de navigation pleine largeur, libellés plus lisibles. */
+[data-testid="stTabs"] [role="tablist"] { gap: .25rem; background: #F0F2EC; padding: .3rem; border-radius: .7rem; border: 0; box-shadow: none; }
+[data-testid="stTab"] { padding: .5rem 1rem; border-radius: .5rem; height: auto; }
+[data-testid="stTab"] p { font-size: .98rem; font-weight: 500; }
+[data-testid="stTab"][aria-selected="true"] { background: #FFFFFF; box-shadow: 0 1px 2px rgba(31,35,40,.10); }
+[data-testid="stTabs"] .react-aria-SelectionIndicator { display: none; }
+.bodh-hero { padding: 0 0 0.5rem 0; }
 .bodh-flag { display: flex; height: 6px; width: 96px; border-radius: 3px; overflow: hidden; margin-bottom: 1rem; }
 .bodh-flag span:nth-child(1) { flex: 1; background: #0F7B4B; }
 .bodh-flag span:nth-child(2) { flex: 1; background: #E8B200; }
@@ -131,6 +144,12 @@ def ordinal(rank: int) -> str:
     return "1er" if rank == 1 else f"{rank}e"
 
 
+def share(part: int, total: int) -> str:
+    """Part en % à la française, sans afficher « 0 % » pour une part non nulle."""
+    ratio = part / total if total else 0
+    return "< 1 %" if 0 < ratio < 0.01 else f"{ratio:.0%}".replace("%", " %")
+
+
 def to_csv(df: pd.DataFrame) -> bytes:
     # utf-8-sig : accents lisibles quand le fichier est ouvert dans Excel
     return df.to_csv(index=False).encode("utf-8-sig")
@@ -146,6 +165,97 @@ def style_fig(fig: go.Figure, height: int) -> go.Figure:
     fig.update_xaxes(gridcolor="#E9EBE5", linecolor="#E3E5DF")
     fig.update_yaxes(gridcolor="#E9EBE5", automargin=True)  # libellés longs jamais coupés
     return fig
+
+
+def rank_list(rows: pd.DataFrame) -> str:
+    """Liste HTML « indicateur · rang · valeur » (points forts / à surveiller)."""
+    items = "".join(
+        f'<li><span class="lbl">{html.escape(r.label_fr)}</span>'
+        f'<span class="val"><span class="rank">{ordinal(int(r.rank_among_peers))}</span>'
+        f" sur {int(r.n_countries_compared)} · {html.escape(fmt(r.latest_value, r.unit_fr))}</span></li>"
+        for r in rows.itertuples()
+    )
+    return f'<ul class="bodh-list">{items}</ul>'
+
+
+def indicator_cards(rows: pd.DataFrame, history: pd.DataFrame, median_label: str) -> None:
+    """Une carte par indicateur, rangées par thème, avec la courbe du pays depuis 2000.
+    `rows` suit le schéma de mart_benin_scorecard ; grille continue pour ne pas laisser de trous."""
+    theme_order = {t: i for i, t in enumerate(THEMES)}
+    cards = rows.assign(_t=rows.theme.map(theme_order).fillna(99)).sort_values(["_t", "label_fr"])
+    cols = st.columns(4)
+    for i, (_, row) in enumerate(cards.iterrows()):
+        values = history.loc[history.indicator_code == row.indicator_code, "value"].tolist()
+        year = "" if pd.isna(row.latest_year) else f" ({int(row.latest_year)})"
+        if pd.isna(row.latest_value):
+            short = "pas de donnée"
+        elif not pd.isna(row.rank_among_peers):
+            short = f"{ordinal(int(row.rank_among_peers))} sur {int(row.n_countries_compared)}"
+        elif row.position_vs_peers.startswith("au-dessus"):
+            # Pas de sens « mieux / moins bien » : on situe juste par rapport à la médiane
+            short = "sup. à la médiane"
+        elif row.position_vs_peers.startswith("en dessous"):
+            short = "inf. à la médiane"
+        else:
+            short = "hors comparaison"
+        stale = f" Attention : donnée de plus de {WINDOW} ans, hors comparaison." if row.is_stale else ""
+        with cols[i % 4]:
+            st.metric(
+                label=f"{row.label_fr}{year}",
+                value=fmt(row.latest_value, row.unit_fr),
+                delta=fmt_change(row),
+                delta_color="off" if pd.isna(row.higher_is_better)
+                else ("normal" if row.higher_is_better else "inverse"),
+                delta_description=("⚠️ " if row.is_stale else "") + short,
+                icon=THEMES.get(row.theme, ":material/label:"),
+                help=f"{row.theme} · unité : {row.unit_fr}. {row.position_vs_peers.capitalize()} "
+                     f"({median_label} : {fmt(row.peer_median, row.unit_fr)}).{stale} "
+                     f"Source : World Bank, indicateur {row.indicator_code}.",
+                chart_data=values if len(values) > 1 else None,
+                chart_type="area",
+                border=True,
+            )
+
+
+def country_profile(iso: str) -> pd.DataFrame:
+    """Même calcul que mart_benin_scorecard, pour n'importe lequel des 7 pays : dernière
+    valeur, évolution, rang parmi les pays à donnée récente et médiane des autres pays."""
+    lv = latest.copy()
+    lv["max_year"] = lv.groupby("indicator_code").latest_year.transform("max")
+    comparable = lv[lv.latest_year >= lv.max_year - WINDOW]
+    out = []
+    for ind in indicators.itertuples():
+        own = lv[(lv.indicator_code == ind.indicator_code) & (lv.country_iso3 == iso)]
+        comp = comparable[comparable.indicator_code == ind.indicator_code]
+        others = comp[comp.country_iso3 != iso].latest_value
+        row = own.iloc[0] if len(own) else None
+        value = row.latest_value if row is not None else None
+        median = others.median() if len(others) else None
+        rank = None
+        if pd.notna(ind.higher_is_better) and iso in set(comp.country_iso3):
+            ranks = comp.latest_value.rank(method="min", ascending=not bool(ind.higher_is_better))
+            rank = int(ranks[comp.country_iso3 == iso].iloc[0])
+        if value is None or pd.isna(value) or median is None:
+            position = "données insuffisantes"
+        elif pd.isna(ind.higher_is_better):
+            position = "au-dessus de la médiane" if value >= median else "en dessous de la médiane"
+        elif (value >= median) == bool(ind.higher_is_better):
+            position = "mieux que la médiane des pairs"
+        else:
+            position = "moins bien que la médiane des pairs"
+        out.append({
+            "indicator_code": ind.indicator_code, "label_fr": ind.label_fr, "theme": ind.theme,
+            "unit_fr": ind.unit_fr, "higher_is_better": ind.higher_is_better,
+            "latest_year": row.latest_year if row is not None else None, "latest_value": value,
+            "baseline_year": row.baseline_year if row is not None else None,
+            "change_abs": row.change_abs if row is not None else None,
+            "change_pct": row.change_pct if row is not None else None,
+            "change_in_points": "%" in ind.unit_fr, "peer_median": median,
+            "rank_among_peers": rank, "n_countries_compared": len(comp),
+            "position_vs_peers": position,
+            "is_stale": value is not None and pd.notna(value) and iso not in set(comp.country_iso3),
+        })
+    return pd.DataFrame(out)
 
 
 if not WAREHOUSE.exists() and not any(EXPORTS.glob("*.parquet")):
@@ -167,6 +277,10 @@ focus_series = query(
     (FOCUS,),
 )
 catalog = query("select * from marts.mart_data_catalog order by kind, title")
+try:
+    odfa = odfa_catalog.enrich(query("select * from marts.mart_odfa_datasets"))
+except duckdb.Error:  # entrepôt antérieur à l'ajout d'ODFA
+    odfa = pd.DataFrame()
 freshness = query(
     "select max(source_last_updated) as src, max(ingested_at) as ing from marts.fct_indicator_values"
 ).iloc[0]
@@ -179,6 +293,14 @@ hidden_demo = 0
 if not is_demo and catalog["is_demo"].any():
     hidden_demo = int(catalog["is_demo"].sum())
     catalog = catalog[~catalog["is_demo"]]
+
+# Jeux ODFA du catalogue général : titre lisible et thème estimé à la place du slug et de
+# la catégorie unique « Manual » renvoyée par le portail
+is_odfa = catalog.source.fillna("").str.startswith("Open Data for Africa")
+if is_odfa.any():
+    catalog.loc[is_odfa, "topic"] = [odfa_catalog.estimate_theme(t, s.removeprefix("Open Data for Africa — "))
+                                     for t, s in zip(catalog.loc[is_odfa, "title"], catalog.loc[is_odfa, "source"])]
+    catalog.loc[is_odfa, "title"] = catalog.loc[is_odfa, "title"].map(odfa_catalog.humanize_title)
 
 focus_name = countries.loc[countries.is_focus, "country_name_fr"].iloc[0]
 peer_names = countries.loc[~countries.is_focus, "country_name_fr"].sort_values().tolist()
@@ -203,7 +325,9 @@ st.markdown(
     f":green-badge[:material/monitoring: {len(scorecard)} indicateurs] "
     f":gray-badge[:material/public: {len(countries)} pays] "
     ":gray-badge[:material/database: World Bank WDI] "
-    f":gray-badge[:material/update: Collecte du {fmt_date(freshness.ing)}]"
+    + (f":gray-badge[:material/folder_open: {len(odfa):,} jeux Open Data for Africa] ".replace(",", " ")
+       if len(odfa) else "")
+    + f":gray-badge[:material/update: Collecte du {fmt_date(freshness.ing)}]"
 )
 
 if is_demo:
@@ -213,9 +337,11 @@ if is_demo:
         icon=":material/warning:",
     )
 
-tab_score, tab_compare, tab_catalog, tab_about = st.tabs([
+tab_score, tab_country, tab_compare, tab_odfa, tab_catalog, tab_about = st.tabs([
     ":material/dashboard: Tableau de bord",
+    ":material/flag: Fiche pays",
     ":material/compare_arrows: Comparer",
+    ":material/folder_open: Open Data for Africa",
     ":material/menu_book: Catalogue",
     ":material/info: Méthode",
 ])
@@ -235,15 +361,6 @@ with tab_score:
     k3.metric(f"Indicateurs où le {focus_name} est 1er", f"{firsts}", border=True)
 
     # Points forts / à surveiller : les 3 meilleurs et les 3 moins bons rangs
-    def rank_list(rows: pd.DataFrame) -> str:
-        items = "".join(
-            f'<li><span class="lbl">{html.escape(r.label_fr)}</span>'
-            f'<span class="val"><span class="rank">{ordinal(int(r.rank_among_peers))}</span>'
-            f" sur {int(r.n_countries_compared)} · {html.escape(fmt(r.latest_value, r.unit_fr))}</span></li>"
-            for r in rows.itertuples()
-        )
-        return f'<ul class="bodh-list">{items}</ul>'
-
     by_rank = ranked.sort_values(["rank_among_peers", "label_fr"])
     s1, s2 = st.columns(2)
     with s1.container(border=True):
@@ -305,34 +422,89 @@ with tab_score:
     st.caption("Dernière valeur, évolution sur 5 ans, rang parmi les 7 pays et courbe du Bénin depuis 2000. "
                "Icônes : " + " · ".join(f"{icon} {name}" for name, icon in THEMES.items()
                                         if name in set(scorecard.theme)) + ".")
-    theme_order = {t: i for i, t in enumerate(THEMES)}
-    cards = scorecard.assign(_t=scorecard.theme.map(theme_order).fillna(99)).sort_values(["_t", "label_fr"])
-    cols = st.columns(4)
-    for i, (_, row) in enumerate(cards.iterrows()):
-        history = focus_series.loc[focus_series.indicator_code == row.indicator_code, "value"].tolist()
-        year = "" if pd.isna(row.latest_year) else f" ({int(row.latest_year)})"
-        if not pd.isna(row.rank_among_peers):
-            short = f"{ordinal(int(row.rank_among_peers))} sur {int(row.n_countries_compared)}"
-        else:
-            # Pas de sens « mieux / moins bien » : on situe juste par rapport à la médiane
-            short = "sup. à la médiane" if row.position_vs_peers.startswith("au-dessus") else "inf. à la médiane"
-        stale = f" Attention : donnée de plus de {WINDOW} ans, hors comparaison." if row.is_stale else ""
-        with cols[i % 4]:
-            st.metric(
-                label=f"{row.label_fr}{year}",
-                value=fmt(row.latest_value, row.unit_fr),
-                delta=fmt_change(row),
-                delta_color="off" if pd.isna(row.higher_is_better)
-                else ("normal" if row.higher_is_better else "inverse"),
-                delta_description=("⚠️ " if row.is_stale else "") + short,
-                icon=THEMES.get(row.theme, ":material/label:"),
-                help=f"{row.theme} · unité : {row.unit_fr}. {row.position_vs_peers.capitalize()} "
-                     f"(médiane des voisins : {fmt(row.peer_median, row.unit_fr)}).{stale} "
-                     f"Source : World Bank, indicateur {row.indicator_code}.",
-                chart_data=history if len(history) > 1 else None,
-                chart_type="area",
-                border=True,
-            )
+    indicator_cards(scorecard, focus_series, "médiane des voisins")
+
+# --- Fiche pays --------------------------------------------------------------
+with tab_country:
+    st.space("small")
+    names = dict(zip(countries.country_iso3, countries.country_name_fr))
+    with st.container(border=True):
+        c1, c2 = st.columns([2, 3], vertical_alignment="bottom")
+        # Lié à l'URL (?pays=Togo) : une fiche peut être partagée telle quelle
+        iso = c1.selectbox("Pays", [FOCUS] + peer_isos, format_func=names.get, key="pays",
+                           bind="query-params")
+        info = countries.set_index("country_iso3").loc[iso]
+        c2.markdown(
+            f":gray-badge[:material/public: {info.region_fr}] "
+            + (":green-badge[:material/handshake: UEMOA] " if info.is_uemoa else ":gray-badge[Hors UEMOA] ")
+            + f":gray-badge[Comparé aux {len(countries) - 1} autres pays du hub]"
+        )
+
+    profile = country_profile(iso)
+    country_series = query(
+        "select indicator_code, year, value from marts.fct_indicator_values where country_iso3 = ? order by year",
+        (iso,),
+    )
+    p_ranked = profile[profile.higher_is_better.notna() & profile.rank_among_peers.notna()]
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Mieux que la médiane des autres", f"{(profile.position_vs_peers == 'mieux que la médiane des pairs').sum()}"
+              f" / {len(p_ranked)}", border=True,
+              help="Indicateurs où le sens de lecture est clair (plus = mieux, ou l'inverse).")
+    k2.metric("Moins bien que la médiane", f"{(profile.position_vs_peers == 'moins bien que la médiane des pairs').sum()}"
+              f" / {len(p_ranked)}", border=True)
+    k3.metric(f"Indicateurs classés 1er sur {len(countries)}", int((p_ranked.rank_among_peers == 1).sum()), border=True)
+    k4.metric("Données anciennes ou absentes", int(profile.is_stale.sum() + profile.latest_value.isna().sum()),
+              border=True, help=f"Dernière valeur publiée il y a plus de {WINDOW} ans, ou aucune valeur.")
+
+    p_by_rank = p_ranked.sort_values(["rank_among_peers", "label_fr"])
+    if len(p_by_rank):
+        s1, s2 = st.columns(2)
+        with s1.container(border=True):
+            st.markdown(":material/trending_up: **Points forts**")
+            st.html(rank_list(p_by_rank.head(3)))
+        with s2.container(border=True):
+            st.markdown(":material/visibility: **À surveiller**")
+            st.html(rank_list(p_by_rank.tail(3).iloc[::-1]))
+
+    if iso != FOCUS:
+        # Face-à-face avec le Bénin, indicateur par indicateur
+        st.space("small")
+        st.subheader(f"{names[iso]} face au {focus_name}")
+        duel = profile.merge(
+            scorecard[["indicator_code", "latest_value", "latest_year"]].rename(
+                columns={"latest_value": "focus_value", "latest_year": "focus_year"}),
+            on="indicator_code",
+        )
+
+        def advantage(r) -> str:
+            if pd.isna(r.latest_value) or pd.isna(r.focus_value) or pd.isna(r.higher_is_better):
+                return "—"
+            if r.latest_value == r.focus_value:
+                return "égalité"
+            return names[iso] if (r.latest_value > r.focus_value) == bool(r.higher_is_better) else focus_name
+
+        duel_view = pd.DataFrame({
+            "Indicateur": duel.label_fr,
+            names[iso]: [f"{fmt(v, u)} ({int(y)})" if pd.notna(v) else "—"
+                         for v, u, y in zip(duel.latest_value, duel.unit_fr, duel.latest_year)],
+            focus_name: [f"{fmt(v, u)} ({int(y)})" if pd.notna(v) else "—"
+                         for v, u, y in zip(duel.focus_value, duel.unit_fr, duel.focus_year)],
+            "Avantage": [advantage(r) for r in duel.itertuples()],
+            "Unité": duel.unit_fr,
+        })
+        st.dataframe(duel_view, hide_index=True, width="stretch",
+                     alt=f"Tableau comparant {names[iso]} et le {focus_name} sur chaque indicateur")
+        wins = (duel_view.Avantage == names[iso]).sum()
+        losses = (duel_view.Avantage == focus_name).sum()
+        st.caption(f"Sur les indicateurs à sens de lecture clair : avantage {names[iso]} sur {wins}, "
+                   f"avantage {focus_name} sur {losses}. Population et urbanisation ne sont pas jugées. "
+                   "Les années peuvent différer d'un pays à l'autre (dernière valeur publiée).")
+
+    st.space("small")
+    st.subheader("Détail par indicateur")
+    st.caption(f"{names[iso]} : dernière valeur, évolution sur 5 ans, rang parmi les {len(countries)} pays "
+               "et courbe depuis 2000.")
+    indicator_cards(profile, country_series, "médiane des autres pays")
 
 # --- Comparer ----------------------------------------------------------------
 with tab_compare:
@@ -435,12 +607,121 @@ with tab_compare:
             file_name=f"{code}.csv", mime="text/csv", icon=":material/download:", width="stretch",
         )
 
+# --- Open Data for Africa ----------------------------------------------------
+with tab_odfa:
+    st.space("small")
+    st.markdown(
+        f"Le portail [Open Data for Africa — Bénin]({ODFA_URL}), animé par la Banque africaine de "
+        "développement, publie les tableaux de l'INStaD et des ministères. Le hub en tient l'inventaire "
+        "à jour chaque semaine pour savoir **ce qui existe, qui le produit et à quand remonte la "
+        "dernière mise à jour**."
+    )
+    if odfa.empty:
+        st.info("Inventaire Open Data for Africa pas encore chargé : lance `make run`.", icon=":material/info:")
+    else:
+        st.info(
+            "**Inventaire uniquement.** Les valeurs de ces jeux ne sont pas encore intégrées au hub : "
+            "le portail bloque les téléchargements automatisés. Chaque ligne renvoie vers le jeu sur le portail.",
+            icon=":material/inventory_2:",
+        )
+        recent = (odfa.freshness == "moins d'un an").sum()
+        licensed = odfa.license.notna().sum()
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Jeux inventoriés", f"{len(odfa):,}".replace(",", "\u202f"), border=True)
+        k2.metric("Producteurs", odfa.source_name.nunique(), border=True,
+                  help="Noms tels que saisis sur le portail (une même institution peut apparaître sous plusieurs noms).")
+        k3.metric("Mis à jour depuis moins d'un an", int(recent), border=True,
+                  delta=f"{share(recent, len(odfa))} du total", delta_color="off", delta_arrow="off")
+        k4.metric("Licence déclarée", int(licensed), border=True,
+                  delta=f"{share(licensed, len(odfa))} du total", delta_color="off", delta_arrow="off",
+                  help="Sans licence déclarée, vérifier les conditions d'utilisation sur le portail.")
+
+        g1, g2 = st.columns([3, 2])
+        with g1.container(border=True):
+            st.markdown("**Jeux par thème** · estimé d'après le titre et le producteur")
+            by_theme = odfa.theme.value_counts().sort_values()
+            fig = go.Figure(go.Bar(
+                x=by_theme.values, y=by_theme.index, orientation="h",
+                marker=dict(color=FOCUS_COLOR, cornerradius=4),
+                text=by_theme.values, textposition="outside", cliponaxis=False,
+                hovertemplate="%{y} : %{x} jeux<extra></extra>",
+            ))
+            style_fig(fig, height=60 + 30 * len(by_theme))
+            fig.update_layout(showlegend=False, bargap=0.3, margin=dict(l=10, r=40, t=10, b=10))
+            fig.update_xaxes(showticklabels=False, showgrid=False)
+            st.plotly_chart(fig, width="stretch")
+        with g2.container(border=True):
+            st.markdown("**Année de dernière mise à jour**")
+            by_year = odfa.last_updated_on.dt.year.value_counts().sort_index()
+            fig = go.Figure(go.Bar(
+                x=by_year.index.astype(str), y=by_year.values,
+                marker=dict(color=FOCUS_COLOR, cornerradius=4),
+                text=by_year.values, textposition="outside", cliponaxis=False,
+                hovertemplate="%{x} : %{y} jeux<extra></extra>",
+            ))
+            style_fig(fig, height=60 + 30 * len(by_theme))
+            fig.update_layout(showlegend=False, bargap=0.3, margin=dict(l=10, r=10, t=30, b=10))
+            fig.update_yaxes(showticklabels=False, showgrid=False)
+            fig.update_xaxes(type="category")
+            st.plotly_chart(fig, width="stretch")
+            oldest = by_year.idxmax()
+            st.caption(f"{by_year.max()} jeux ont été mis à jour pour la dernière fois en {oldest} : "
+                       "de bons candidats à une actualisation.")
+
+        with st.container(border=True):
+            f1, f2 = st.columns([1, 1])
+            themes = f1.multiselect("Thème", sorted(odfa.theme.unique()), placeholder="Tous les thèmes")
+            freshness_choice = f2.segmented_control(
+                "Dernière mise à jour", ["moins d'un an", "1 à 3 ans", "plus de 3 ans"],
+                selection_mode="multi", default=None,
+            )
+            f3, f4 = st.columns([1, 1])
+            search = f3.text_input("Rechercher", placeholder="ex. vaccination, coton, électricité…",
+                                   icon=":material/search:", key="odfa_search")
+            producers = f4.pills("Producteur", sorted(odfa.producer.unique()), selection_mode="multi")
+        view = odfa
+        if themes:
+            view = view[view.theme.isin(themes)]
+        if freshness_choice:
+            view = view[view.freshness.isin(freshness_choice)]
+        if producers:
+            view = view[view.producer.isin(producers)]
+        if search:
+            mask = pd.Series(False, index=view.index)
+            for col in ("title_fr", "source_name", "theme", "survey"):
+                mask |= view[col].fillna("").str.contains(search, case=False, regex=False)
+            view = view[mask]
+
+        table = view.assign(license=view.license.fillna("non précisée")).sort_values(
+            "last_updated_on", ascending=False)
+        # Sigle de l'enquête déjà en tête du titre ; licence presque toujours absente : CSV seulement
+        columns = ["title_fr", "last_updated_on", "theme", "source_name", "url"]
+        st.dataframe(
+            table[columns],
+            column_config={
+                "title_fr": st.column_config.TextColumn("Titre", width="large"),
+                "last_updated_on": st.column_config.DateColumn("Mis à jour", format="DD/MM/YYYY", width="small"),
+                "theme": "Thème (estimé)",
+                "source_name": st.column_config.TextColumn("Producteur", width="medium"),
+                "url": st.column_config.LinkColumn("Lien", display_text="ouvrir", width="small"),
+            },
+            hide_index=True, width="stretch",
+            alt="Inventaire des jeux de données Open Data for Africa — Bénin",
+        )
+        c1, c2 = st.columns([4, 1])
+        c1.caption(f"{len(view)} jeu(x) sur {len(odfa)}. Titres reconstitués à partir des identifiants du "
+                   "portail (sigle de l'enquête en tête : EDS, MICS, RGE…) ; certains sont tronqués à la source.")
+        c2.download_button("Télécharger (CSV)", to_csv(table[columns + ["survey", "license", "producer", "dataset_id"]]),
+                           file_name="odfa_benin_inventaire.csv", mime="text/csv",
+                           icon=":material/download:", width="stretch")
+
 # --- Catalogue ---------------------------------------------------------------
 with tab_catalog:
     st.space("small")
     st.markdown(
-        "Ce que le hub sait des données disponibles sur le Bénin : indicateurs suivis, "
-        "enquêtes de l'INStaD et fichiers ouverts ajoutés à la main (data.gouv.bj)."
+        "Tout ce que le hub sait des données disponibles sur le Bénin, au même endroit : indicateurs "
+        "suivis, jeux du portail Open Data for Africa, enquêtes de l'INStaD et fichiers ouverts ajoutés "
+        "à la main (data.gouv.bj)."
     )
     counts = catalog.kind.value_counts()
     if len(counts):
@@ -496,6 +777,7 @@ with tab_about:
 
 - *World Bank — World Development Indicators*, API publique v2.
 - *INStaD — catalogue de microdonnées (NADA)* : métadonnées des enquêtes uniquement.
+- *Open Data for Africa — Bénin* (BAD) : inventaire des jeux via l'API du portail (titre, producteur, mise à jour, licence).
 - *data.gouv.bj* : fichiers téléchargés à la main (le portail n'autorise pas la collecte automatisée), avec URL et date de téléchargement tracées.
 """
         )
@@ -517,12 +799,12 @@ with tab_about:
 - Dernière mise à jour publiée par la World Bank : {fmt_date(freshness.src)}.
 - Dernière collecte par le hub : {fmt_date(freshness.ing)}.
 
-Projet open source : pipeline Python → DuckDB → dbt → Streamlit.
+Projet open source : pipeline Python → DuckDB → dbt → Streamlit. [Code sur GitHub]({REPO_URL}).
 """
         )
 
 st.divider()
 st.caption(
-    f"Bénin Open Data Hub · données World Bank, INStaD, data.gouv.bj · "
-    f"dernière collecte le {fmt_date(freshness.ing)}."
+    f"Bénin Open Data Hub · données World Bank, Open Data for Africa, INStaD, data.gouv.bj · "
+    f"dernière collecte le {fmt_date(freshness.ing)} · [code source]({REPO_URL})"
 )
