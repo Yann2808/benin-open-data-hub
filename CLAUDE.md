@@ -12,14 +12,22 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   - `odfa.py` : portail Open Data for Africa — Bénin (Knoema, BAD) via son API. `make run` rafraîchit le catalogue,
     `make odfa` collecte tous les jeux (reprise : `data/raw/odfa/<id>.parquet`, `--refresh` pour tout recollecter).
     robots.txt interdit `/api/1.0/sdmx` : ne jamais l'appeler. Licence de chaque jeu dans `mart_odfa_datasets`.
+    Le téléchargement des valeurs renvoie 403 (Cloudflare « Just a moment ») : **ne pas contourner** la protection ;
+    voie légitime = identifiants API (`ODFA_APP_ID` / `ODFA_APP_SECRET`, lus par le code) ou contact du portail.
   - `manual.py` : fichiers data.gouv.bj déposés à la main dans `data/manual/` et déclarés dans `config/sources.yml`
     (data.gouv.bj interdit la collecte automatisée dans son robots.txt : ne jamais scraper).
-  - `common.py` : HttpClient (retries sur 5xx/429/timeouts, pas sur 4xx), snapshots JSONL dans `data/raw/`.
+  - `common.py` : HttpClient (retries sur 5xx/429/timeouts, pas sur 4xx), snapshots JSONL dans `data/raw/`,
+    `drop_demo_rows` : une collecte réelle (`run.py` sans `--offline`) purge d'abord les lignes de démo.
 - `transform/` (dbt-duckdb) : staging (vues) → marts (tables) : dim_country, dim_indicator,
   fct_indicator_values, mart_latest_values, mart_benin_scorecard, mart_data_catalog, mart_odfa_datasets. 38 tests.
 - `app/streamlit_app.py` : 4 onglets (Tableau de bord, Comparer, Catalogue, Méthode).
-  Lit DuckDB en local, ou `exports/*.parquet` une fois hébergé.
-- `.github/workflows/refresh.yml` : tests à chaque push, collecte réelle chaque lundi, export Parquet commité.
+  Lit DuckDB en local, ou `exports/*.parquet` une fois hébergé. Streamlit ≥ 1.50 (metrics avec sparklines, badges).
+  Thème dans `.streamlit/config.toml` (vert Bénin `#0F7B4B`, Inter / Space Grotesk, clair imposé).
+  Couleurs des pays attribuées par code ISO, jamais par rang : le Bénin en vert, chaque voisin sa couleur.
+- `.github/workflows/refresh.yml` : tests à chaque push et PR ; collecte réelle chaque lundi 05:17 UTC
+  (ou `workflow_dispatch`), dbt build, export Parquet commité sur `main` par `github-actions[bot]`.
+- `.devcontainer/` : config Codespaces générée par Streamlit Cloud (lance l'app sur le port 8501).
+- Skill Claude Code `developing-with-streamlit` : lien symbolique local (ignoré par Git), recréé par `streamlit skills`.
 - Ajouter un indicateur ou un pays : uniquement `config/sources.yml`.
 
 ## Commandes
@@ -34,19 +42,24 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   Déjà géré par un marqueur dans `requirements.txt` ; installer avec `pip install --prefer-binary`.
 - Le Python système (`python3` de macOS) est trop ancien : ne pas l'utiliser.
 
-## État au 2026-10-11
-- ✅ Collecte World Bank réelle OK (2 184 lignes), dbt OK, dashboard OK sur vraies données.
-- ❌ API INStaD : `/index.php/api/catalog/search` renvoie 404. `nada.py` essaie maintenant 5 adresses ;
-  si aucune ne marche, analyser la sortie de `make diagnose` (section API INStaD) pour trouver la bonne.
-- Pas encore de dépôt Git ni de GitHub.
+## État au 2026-10-14
+- ✅ Dépôt public https://github.com/Yann2808/benin-open-data-hub (PR #1 mergée : ODFA + refonte du dashboard).
+- ✅ Dashboard public : https://bj-odh.streamlit.app/ (Streamlit Community Cloud, branche `main`,
+  fichier `app/streamlit_app.py`, visibilité publique). Redéploiement automatique à chaque commit sur `main`.
+- ✅ Collecte World Bank réelle OK (2 133 valeurs dans les exports, jusqu'à 2025), dbt OK.
+- ✅ Catalogue ODFA : 1 107 jeux inventoriés ; ❌ valeurs non collectées (403 Cloudflare, voir plus haut).
+- ❌ INStaD (nada.instad.bj) : tout le site en maintenance (404/503) au 2026-10-12. Source optionnelle, on attend.
 
 ## Prochaines étapes
-1. Trouver l'API INStaD qui marche (ou basculer sur l'export du catalogue).
-2. `git init`, premier commit, dépôt public GitHub `Yann2808/benin-open-data-hub`.
-3. Lancer le workflow `refresh` une fois pour produire `exports/*.parquet`, puis déployer sur Streamlit Community Cloud.
-4. v0.1 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
+1. Accès API ODFA (identifiants) pour collecter les valeurs ; humaniser les titres des jeux (slugs).
+2. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
+3. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
 
 ## Conventions
 - Code et commentaires en français, noms de variables en anglais.
 - Toute nouvelle source : colonnes explicites dans raw, un modèle stg, des tests dbt, une entrée au catalogue.
 - Ne jamais présenter les données de démo (`make demo`, marquées `DEMO-SYNTHETIQUE`) comme réelles.
+- Git : travailler sur une branche, PR vers `main` (merger = mettre en ligne). Puller `main` avant de commencer,
+  le bot y commite les exports chaque lundi. Ne jamais commiter `.streamlit/secrets.toml`.
+- Usage de Claude transparent : trailer `Co-Authored-By: Claude` dans les commits, mention dans le README
+  (section « Méthode de travail ») ; pas de ligne « 🤖 Generated with Claude Code » dans les PR.
