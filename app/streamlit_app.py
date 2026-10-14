@@ -39,12 +39,21 @@ THEMES = {
 
 st.set_page_config(page_title="Bénin Open Data Hub", page_icon=":material/insights:", layout="wide")
 
-# Quelques styles que le thème (.streamlit/config.toml) ne couvre pas : bandeau
-# d'en-tête et listes « points forts / à surveiller ».
+# Quelques styles que le thème (.streamlit/config.toml) ne couvre pas : marge
+# haute, barre d'onglets, bandeau d'en-tête et listes « points forts / à surveiller ».
 st.html(
     """
 <style>
-.bodh-hero { padding: 0.25rem 0 0.75rem 0; }
+/* Marge haute par défaut (~6rem) trop large : l'en-tête remonte sous la barre Streamlit. */
+[data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
+[data-testid="stHeader"] { background: transparent; }
+/* Onglets : barre de navigation pleine largeur, libellés plus lisibles. */
+[data-testid="stTabs"] [role="tablist"] { gap: .25rem; background: #F0F2EC; padding: .3rem; border-radius: .7rem; border: 0; box-shadow: none; }
+[data-testid="stTab"] { padding: .5rem 1rem; border-radius: .5rem; height: auto; }
+[data-testid="stTab"] p { font-size: .98rem; font-weight: 500; }
+[data-testid="stTab"][aria-selected="true"] { background: #FFFFFF; box-shadow: 0 1px 2px rgba(31,35,40,.10); }
+[data-testid="stTabs"] .react-aria-SelectionIndicator { display: none; }
+.bodh-hero { padding: 0 0 0.5rem 0; }
 .bodh-flag { display: flex; height: 6px; width: 96px; border-radius: 3px; overflow: hidden; margin-bottom: 1rem; }
 .bodh-flag span:nth-child(1) { flex: 1; background: #0F7B4B; }
 .bodh-flag span:nth-child(2) { flex: 1; background: #E8B200; }
