@@ -14,7 +14,9 @@ Les grands indicateurs du Bénin, comparés à ses voisins d'Afrique de l'Ouest,
 | Brique | Contenu |
 |---|---|
 | **Tableau de bord** | 12 indicateurs (démographie, économie, numérique, énergie, éducation, emploi, santé) : dernière valeur, évolution sur 5 ans, rang et position face à la médiane de 6 pays voisins |
+| **Fiche pays** | Le même diagnostic pour chacun des 7 pays (rangs, points forts, courbes) et un face-à-face avec le Bénin ; lien partageable (`?pays=Togo`) |
 | **Comparer** | Séries temporelles du Bénin face à ses pairs, indicateur par indicateur |
+| **Open Data for Africa** | Inventaire des 1 107 jeux du portail de la BAD : titres lisibles, thème estimé, producteur, fraîcheur, recherche et filtres |
 | **Catalogue** | Tout ce que le hub connaît : indicateurs, enquêtes de l'INStaD, jeux du portail Open Data for Africa (BAD), fichiers data.gouv.bj déposés, avec source, période, licence et lien |
 
 ## Architecture
