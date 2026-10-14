@@ -13,3 +13,7 @@ tests/fixtures/worldbank_normalized.json
 tests/fixtures/nada_normalized.json
 .DS_Store
 .user.yml
+
+# Skills Streamlit pour agents IA (liens vers le .venv local, propres à chaque machine)
+.agents/skills/developing-with-streamlit
+.claude/skills/developing-with-streamlit

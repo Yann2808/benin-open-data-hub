@@ -1,5 +1,10 @@
 # Bénin Open Data Hub
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://bj-odh.streamlit.app/)
+[![refresh](https://github.com/Yann2808/benin-open-data-hub/actions/workflows/refresh.yml/badge.svg)](https://github.com/Yann2808/benin-open-data-hub/actions/workflows/refresh.yml)
+
+**Dashboard en ligne : [bj-odh.streamlit.app](https://bj-odh.streamlit.app/)**
+
 Les grands indicateurs du Bénin, comparés à ses voisins d'Afrique de l'Ouest, et un catalogue des données publiques disponibles sur le pays. Sources ouvertes, pipeline reproductible, rafraîchi chaque semaine.
 
 **Pourquoi.** La Stratégie nationale d'IA et des mégadonnées (SNIAM 2023-2027) et le programme 2026-2033 font de la donnée publique une priorité. Mais les données sur le Bénin sont dispersées entre la World Bank, l'INStaD et data.gouv.bj, dans des formats hétérogènes. Ce hub les rassemble, les documente et les rend lisibles.
@@ -58,16 +63,20 @@ make docs   # documentation dbt et lignage
 - Le rang n'est calculé que pour les indicateurs au sens clair (plus d'accès à l'électricité = mieux, plus d'inflation = moins bien). Population et urbanisation sont seulement situées par rapport à la médiane.
 - Les évolutions des indicateurs en % sont données en points, les autres en % relatif.
 
-## Mettre en ligne
+## En ligne
 
-1. Pousser le dépôt sur GitHub (public).
-2. Lancer le workflow `refresh` à la main une première fois : il produit `exports/*.parquet`.
-3. Déployer `app/streamlit_app.py` sur Streamlit Community Cloud (gratuit), qui lit ces exports.
+Le dashboard public tourne sur Streamlit Community Cloud : [bj-odh.streamlit.app](https://bj-odh.streamlit.app/). Aucun serveur à maintenir :
+
+1. **Chaque lundi** (ou à la demande : onglet *Actions* → `refresh` → *Run workflow*), GitHub Actions collecte les sources, lance dbt et ses tests, puis commite les marts dans `exports/*.parquet`. Si un test échoue, rien n'est publié et le site garde la version précédente.
+2. **Streamlit Community Cloud** surveille la branche `main` : à chaque commit (données ou code), l'app redémarre et lit les exports Parquet.
+
+Sur l'offre gratuite, l'app se met en veille après une période sans visite ; le premier visiteur la réveille en une trentaine de secondes.
 
 ## Feuille de route
 
 - [x] v0 : World Bank + catalogue INStaD + dépôt manuel, scorecard, catalogue, CI
-- [x] v0.1 : collecte complète du portail Open Data for Africa — Bénin (API Knoema), inventaire avec fraîcheur et licences
+- [x] v0.1 : inventaire du portail Open Data for Africa — Bénin (1 107 jeux, avec source, fraîcheur et licence) et dashboard public
+- [ ] v0.1 : collecte des valeurs Open Data for Africa (code prêt, `make odfa`) : le téléchargement est aujourd'hui bloqué par la protection anti-robots du portail, en attente d'un accès API
 - [ ] v0.2 : premiers jeux de données data.gouv.bj (éducation, santé) et carte par commune
 - [ ] v0.2 : indicateurs propres au numérique béninois (ARCEP, ASIN) et à l'agriculture
 - [ ] v0.3 : API publique en lecture (exports Parquet + DuckDB-WASM ou FastAPI)
