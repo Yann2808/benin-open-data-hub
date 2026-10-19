@@ -11,6 +11,7 @@ select
     c.theme,
     c.unit_fr,
     c.higher_is_better,
+    c.section,
     'World Bank — World Development Indicators'                        as source_name,
     'https://data.worldbank.org/indicator/' || c.indicator_code         as source_url
 from {{ ref('stg_indicator_catalog') }} c

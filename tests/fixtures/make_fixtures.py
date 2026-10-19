@@ -35,8 +35,21 @@ SHAPES = {
     "EG.ELC.ACCS.ZS": (22, 0.03, 0.02),
     "SE.PRM.ENRR": (85, 0.012, 0.02),
     "SL.UEM.TOTL.ZS": (2.5, 0.0, 0.08),
+    "SP.POP.1564.TO.ZS": (50, 0.004, 0.003),
+    "SL.TLF.TOTL.IN": (2.8e6, 0.03, 0.005),
+    "NY.GDP.PCAP.PP.CD": (1500, 0.04, 0.03),
+    "NV.AGR.TOTL.ZS": (30, 0.0, 0.08),
+    "NV.IND.TOTL.ZS": (18, 0.0, 0.08),
+    "NV.SRV.TOTL.ZS": (45, 0.0, 0.05),
+    "PA.NUS.FCRF": (600, 0.0, 0.06),
+    "FS.AST.PRVT.GD.ZS": (15, 0.0, 0.1),
+    "BX.KLT.DINV.WD.GD.ZS": (2.0, 0.0, 0.4),
+    "BX.KLT.DINV.CD.WD": (2e8, 0.0, 0.4),
+    "NE.TRD.GNFS.ZS": (55, 0.0, 0.08),
 }
-ADDITIVE = {"NY.GDP.MKTP.KD.ZG", "FP.CPI.TOTL.ZG", "SL.UEM.TOTL.ZS"}
+ADDITIVE = {"NY.GDP.MKTP.KD.ZG", "FP.CPI.TOTL.ZG", "SL.UEM.TOTL.ZS", "NV.AGR.TOTL.ZS", "NV.IND.TOTL.ZS",
+            "NV.SRV.TOTL.ZS", "PA.NUS.FCRF", "FS.AST.PRVT.GD.ZS", "BX.KLT.DINV.WD.GD.ZS",
+            "BX.KLT.DINV.CD.WD", "NE.TRD.GNFS.ZS"}
 CAPPED = {"SP.URB.TOTL.IN.ZS", "IT.NET.USER.ZS", "EG.ELC.ACCS.ZS"}
 
 
