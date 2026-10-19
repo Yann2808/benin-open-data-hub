@@ -49,8 +49,10 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   Déjà géré par un marqueur dans `requirements.txt` ; installer avec `pip install --prefer-binary`.
 - Le Python système (`python3` de macOS) est trop ancien : ne pas l'utiliser.
 
-## État au 2026-10-14
+## État au 2026-10-19
 - ✅ Dépôt public https://github.com/Yann2808/benin-open-data-hub (PR #1 mergée : ODFA + refonte du dashboard).
+- ⏳ Onglet « Investir au Bénin » : PR #5 vers `main`, à merger puis lancer le workflow refresh (la PR #4 visait
+  la mauvaise branche).
 - ✅ Dashboard public : https://bj-odh.streamlit.app/ (Streamlit Community Cloud, branche `main`,
   fichier `app/streamlit_app.py`, visibilité publique). Redéploiement automatique à chaque commit sur `main`.
 - ✅ Collecte World Bank réelle OK (2 133 valeurs dans les exports, jusqu'à 2025), dbt OK.
@@ -68,5 +70,10 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 - Ne jamais présenter les données de démo (`make demo`, marquées `DEMO-SYNTHETIQUE`) comme réelles.
 - Git : travailler sur une branche, PR vers `main` (merger = mettre en ligne). Puller `main` avant de commencer,
   le bot y commite les exports chaque lundi. Ne jamais commiter `.streamlit/secrets.toml`.
+- PR : toujours `gh pr create --base main`, jamais vers une autre branche de feature. Si une branche dépend d'une
+  autre, la rebaser sur `main` une fois la première mergée. Avant de merger, vérifier la cible
+  (`gh pr view --json baseRefName`) : la PR #4 a été mergée dans une branche morte et n'est jamais arrivée en ligne.
+- Nouveaux indicateurs dans `config/sources.yml` : après le merge, lancer `gh workflow run refresh.yml`, sinon les
+  exports en ligne ne les contiennent qu'au lundi suivant.
 - Usage de Claude transparent : trailer `Co-Authored-By: Claude` dans les commits, mention dans le README
   (section « Méthode de travail ») ; pas de ligne « 🤖 Generated with Claude Code » dans les PR.
