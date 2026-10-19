@@ -20,7 +20,10 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
     `drop_demo_rows` : une collecte réelle (`run.py` sans `--offline`) purge d'abord les lignes de démo.
 - `transform/` (dbt-duckdb) : staging (vues) → marts (tables) : dim_country, dim_indicator,
   fct_indicator_values, mart_latest_values, mart_benin_scorecard, mart_data_catalog, mart_odfa_datasets. 38 tests.
-- `app/streamlit_app.py` : 6 onglets (Tableau de bord, Fiche pays, Comparer, Open Data for Africa, Catalogue, Méthode).
+- `app/streamlit_app.py` : 7 onglets (Tableau de bord, Fiche pays, Investir au Bénin, Comparer, Open Data for Africa,
+  Catalogue, Méthode). Investir : marché (zones Bénin / + frontaliers / + reste du hub), structure de l'économie,
+  stabilité sur 10 ans (moyenne et écart-type croissance/inflation, monnaie base 100 en 2015), crédit, IDE, ouverture.
+  Pas de Doing Business (arrêté en 2021) ; gouvernance WGI prévue (autre base de l'API World Bank, source 3).
   Fiche pays : `country_profile()` refait en pandas le calcul de `mart_benin_scorecard` pour n'importe quel pays
   (à garder aligné avec le SQL) ; sélecteur lié à l'URL (`?pays=Togo`, libellé du pays).
   `app/odfa_catalog.py` : titres ODFA lisibles depuis les slugs, thème estimé par mots-clés, famille de producteur.
@@ -31,7 +34,8 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   (ou `workflow_dispatch`), dbt build, export Parquet commité sur `main` par `github-actions[bot]`.
 - `.devcontainer/` : config Codespaces générée par Streamlit Cloud (lance l'app sur le port 8501).
 - Skill Claude Code `developing-with-streamlit` : lien symbolique local (ignoré par Git), recréé par `streamlit skills`.
-- Ajouter un indicateur ou un pays : uniquement `config/sources.yml`.
+- Ajouter un indicateur ou un pays : uniquement `config/sources.yml`. Champ `section` : « tableau de bord » (défaut)
+  ou « investir » → colonne `dim_indicator.section`. Le tableau de bord et la fiche pays ne montrent que la première.
 
 ## Commandes
 `make venv` · `make install` · `make demo` (données synthétiques) · `make run` · `make transform` ·

@@ -18,6 +18,13 @@ models:
         data_tests: [not_null]
       - name: theme
         data_tests: [not_null]
+      - name: section
+        description: Où l'indicateur s'affiche (tableau de bord général ou onglet Investir).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['tableau de bord', 'investir']
 
   - name: fct_indicator_values
     description: Une ligne par indicateur × pays × année (valeurs renseignées uniquement).

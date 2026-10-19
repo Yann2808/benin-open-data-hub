@@ -59,6 +59,19 @@ def test_indicator_catalog_keeps_null_direction():
     assert worldbank.indicator_catalog(cfg)[0]["higher_is_better"] == "false"
 
 
+def test_indicator_catalog_section_defaults_to_dashboard():
+    assert worldbank.indicator_catalog(WB_CFG)[0]["section"] == worldbank.DEFAULT_SECTION
+    cfg = {**WB_CFG, "indicators": [{**WB_CFG["indicators"][0], "section": "investir"}]}
+    assert worldbank.indicator_catalog(cfg)[0]["section"] == "investir"
+
+
+def test_config_sections_are_known():
+    import yaml
+    cfg = yaml.safe_load((FIX.parents[1] / "config" / "sources.yml").read_text(encoding="utf-8"))
+    sections = {i.get("section", worldbank.DEFAULT_SECTION) for i in cfg["worldbank"]["indicators"]}
+    assert sections <= set(worldbank.SECTIONS)
+
+
 NADA_CFG = {"site_root": "https://nada.instad.bj", "page_size": 100}
 
 

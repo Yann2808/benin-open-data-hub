@@ -69,6 +69,11 @@ def fetch_all(cfg: dict[str, Any], client: HttpClient | None = None) -> list[dic
     return records
 
 
+# Où l'indicateur s'affiche : tableau de bord général, ou onglet « Investir au Bénin »
+DEFAULT_SECTION = "tableau de bord"
+SECTIONS = (DEFAULT_SECTION, "investir")
+
+
 def indicator_catalog(cfg: dict[str, Any]) -> list[dict[str, Any]]:
     """Métadonnées métier des indicateurs (libellé FR, thème, sens de lecture)."""
     return [
@@ -78,9 +83,10 @@ def indicator_catalog(cfg: dict[str, Any]) -> list[dict[str, Any]]:
             "theme": i["theme"],
             "unit_fr": i["unit"],
             "higher_is_better": None if i.get("higher_is_better") is None else str(i["higher_is_better"]).lower(),
+            "section": i.get("section", DEFAULT_SECTION),
         }
         for i in cfg["indicators"]
     ]
 
 
-CATALOG_COLUMNS = ["indicator_code", "label_fr", "theme", "unit_fr", "higher_is_better"]
+CATALOG_COLUMNS = ["indicator_code", "label_fr", "theme", "unit_fr", "higher_is_better", "section"]

@@ -39,7 +39,12 @@ THEMES = {
     "Numérique": ":material/wifi:",
     "Infrastructures": ":material/bolt:",
     "Emploi": ":material/work:",
+    "Finance et investissement": ":material/account_balance:",
 }
+# Pays frontaliers du Bénin (marché accessible par la route depuis Cotonou)
+BORDERS = ["TGO", "NGA", "NER", "BFA"]
+# Couleurs des secteurs (structure de l'économie) : tons neutres, distincts des couleurs pays
+SECTOR_COLORS = {"NV.AGR.TOTL.ZS": "#A47148", "NV.IND.TOTL.ZS": "#5F6B7A", "NV.SRV.TOTL.ZS": "#D2BF9E"}
 
 st.set_page_config(page_title="Bénin Open Data Hub", page_icon=":material/insights:", layout="wide")
 
@@ -118,7 +123,7 @@ def fmt(value: float | None, unit: str) -> str:
         return "—"
     if "%" in unit:
         return f"{value:,.1f} %".replace(",", " ")
-    if "USD" in unit or unit == "habitants":
+    if "USD" in unit or unit in ("habitants", "personnes"):
         for threshold, suffix in ((1e9, " Md"), (1e6, " M")):
             if abs(value) >= threshold:
                 return f"{value / threshold:,.1f}{suffix}".replace(",", " ")
@@ -224,7 +229,7 @@ def country_profile(iso: str) -> pd.DataFrame:
     lv["max_year"] = lv.groupby("indicator_code").latest_year.transform("max")
     comparable = lv[lv.latest_year >= lv.max_year - WINDOW]
     out = []
-    for ind in indicators.itertuples():
+    for ind in indicators[indicators.indicator_code.isin(dashboard_codes)].itertuples():
         own = lv[(lv.indicator_code == ind.indicator_code) & (lv.country_iso3 == iso)]
         comp = comparable[comparable.indicator_code == ind.indicator_code]
         others = comp[comp.country_iso3 != iso].latest_value
@@ -265,6 +270,13 @@ if not WAREHOUSE.exists() and not any(EXPORTS.glob("*.parquet")):
 scorecard = query("select * from marts.mart_benin_scorecard order by theme, label_fr")
 countries = query("select * from marts.dim_country")
 indicators = query("select * from marts.dim_indicator")
+# Deux familles d'indicateurs (champ `section` de config/sources.yml) : le tableau de bord
+# général et l'onglet « Investir au Bénin ». Exports antérieurs sans section : tableau de bord.
+if "section" not in indicators.columns:
+    indicators["section"] = "tableau de bord"
+dashboard_codes = set(indicators.loc[indicators.section == "tableau de bord", "indicator_code"])
+scorecard_all = scorecard
+scorecard = scorecard_all[scorecard_all.indicator_code.isin(dashboard_codes)]
 latest = query(
     """
     select l.*, c.country_name_fr, c.is_focus
@@ -322,7 +334,7 @@ st.html(
 """
 )
 st.markdown(
-    f":green-badge[:material/monitoring: {len(scorecard)} indicateurs] "
+    f":green-badge[:material/monitoring: {len(scorecard_all)} indicateurs] "
     f":gray-badge[:material/public: {len(countries)} pays] "
     ":gray-badge[:material/database: World Bank WDI] "
     + (f":gray-badge[:material/folder_open: {len(odfa):,} jeux Open Data for Africa] ".replace(",", " ")
@@ -337,9 +349,10 @@ if is_demo:
         icon=":material/warning:",
     )
 
-tab_score, tab_country, tab_compare, tab_odfa, tab_catalog, tab_about = st.tabs([
+tab_score, tab_country, tab_invest, tab_compare, tab_odfa, tab_catalog, tab_about = st.tabs([
     ":material/dashboard: Tableau de bord",
     ":material/flag: Fiche pays",
+    ":material/business_center: Investir au Bénin",
     ":material/compare_arrows: Comparer",
     ":material/folder_open: Open Data for Africa",
     ":material/menu_book: Catalogue",
@@ -506,9 +519,270 @@ with tab_country:
                "et courbe depuis 2000.")
     indicator_cards(profile, country_series, "médiane des autres pays")
 
+# --- Investir au Bénin ---------------------------------------------------------
+with tab_invest:
+    st.space("small")
+    st.markdown(
+        f"Trois questions qu'un entrepreneur ou un investisseur se pose avant de s'installer au {focus_name}, "
+        f"avec les données de la World Bank et la comparaison aux {len(peer_isos)} voisins : **quelle taille "
+        "de marché**, **quelle stabilité**, **quel accès au financement et à l'international**."
+    )
+    invest_codes = set(indicators.loc[indicators.section == "investir", "indicator_code"])
+    all_series = query(
+        """
+        select f.indicator_code, f.country_iso3, f.year, f.value
+        from marts.fct_indicator_values f
+        """
+    )
+    if not invest_codes or not invest_codes & set(all_series.indicator_code):
+        st.info("Les indicateurs de cet onglet ne sont pas encore collectés : lance `make run` "
+                "(ou le workflow `refresh` sur GitHub).", icon=":material/info:")
+    else:
+        names = dict(zip(countries.country_iso3, countries.country_name_fr))
+        invest_rows = scorecard_all[scorecard_all.indicator_code.isin(invest_codes)]
+
+        def series_of(code: str) -> pd.DataFrame:
+            """Années × pays pour un indicateur."""
+            d = all_series[all_series.indicator_code == code]
+            return d.pivot(index="year", columns="country_iso3", values="value").sort_index()
+
+        def latest_of(code: str) -> pd.Series:
+            d = latest[latest.indicator_code == code]
+            return d.set_index("country_iso3").latest_value
+
+        # Stabilité sur les 10 dernières années publiées : moyenne et écart-type
+        growth, inflation = series_of("NY.GDP.MKTP.KD.ZG"), series_of("FP.CPI.TOTL.ZG")
+        last_year = int(growth.index.max()) if len(growth) else None
+        vol_years = (last_year - 10, last_year) if last_year else None
+        stability = pd.DataFrame({
+            "growth_mean": growth.loc[vol_years[0]:].mean(), "growth_sd": growth.loc[vol_years[0]:].std(),
+            "infl_mean": inflation.loc[vol_years[0]:].mean(), "infl_sd": inflation.loc[vol_years[0]:].std(),
+        }) if vol_years else pd.DataFrame()
+
+        # Valeur de la monnaie face au dollar, base 100 en 2015 (plus haut = monnaie plus forte)
+        fx = series_of("PA.NUS.FCRF")
+        fx_base = 2015 if 2015 in fx.index else (fx.index.min() if len(fx) else None)
+
+        pop, gdp = latest_of("SP.POP.TOTL"), latest_of("NY.GDP.MKTP.CD")
+        zones = [
+            (focus_name, [FOCUS]),
+            ("+ pays frontaliers", [FOCUS, *BORDERS]),
+            ("+ reste du hub", [FOCUS, *peer_isos]),
+        ]
+        reach = pop.reindex([FOCUS, *BORDERS]).sum()
+
+        # --- En bref ---
+        k1, k2, k3, k4 = st.columns(4)
+        if not stability.empty and FOCUS in stability.index:
+            st_f = stability.loc[FOCUS]
+            infl_rank = int(stability.infl_mean.rank().loc[FOCUS])
+            k1.metric(f"Croissance moyenne {vol_years[0] + 1}-{last_year}", fmt(st_f.growth_mean, "%"),
+                      border=True, delta=f"{ordinal(int(stability.growth_mean.rank(ascending=False).loc[FOCUS]))}"
+                      f" sur {len(stability)}", delta_color="off", delta_arrow="off",
+                      help="Croissance annuelle moyenne du PIB réel sur les 10 dernières années publiées.")
+            k2.metric(f"Inflation moyenne {vol_years[0] + 1}-{last_year}", fmt(st_f.infl_mean, "%"), border=True,
+                      delta=("la plus basse des " if infl_rank == 1 else f"{ordinal(infl_rank)} plus basse sur ")
+                      + f"{len(stability)}", delta_color="off", delta_arrow="off",
+                      help="Hausse annuelle moyenne des prix à la consommation : le pouvoir d'achat de vos clients "
+                           "et le coût de vos intrants.")
+        if fx_base is not None and FOCUS in fx.columns:
+            fx_change = fx[FOCUS].dropna()
+            change = fx_change.loc[fx_base] / fx_change.iloc[-1] - 1
+            k3.metric(f"Franc CFA / dollar depuis {fx_base}", f"{change * 100:+.0f} %".replace("-", "−"),
+                      border=True, delta="arrimé à l'euro", delta_color="off", delta_arrow="off",
+                      help="Variation de la valeur de la monnaie face au dollar (taux de change officiel moyen). "
+                           "Le franc CFA (XOF) a une parité fixe avec l'euro.")
+        if pd.notna(reach) and reach > 0:
+            k4.metric("Marché accessible par la route", fmt(reach, "habitants"), border=True,
+                      delta=f"dont {fmt(pop.get(FOCUS), 'habitants')} au {focus_name}", delta_color="off",
+                      delta_arrow="off",
+                      help="Population du Bénin et de ses 4 pays frontaliers : "
+                           + ", ".join(names[i] for i in BORDERS) + ".")
+
+        # --- 1. Marché ---
+        st.space("small")
+        st.subheader("1. Le marché")
+        st.caption(f"Le {focus_name} seul est un marché moyen ; avec ses voisins, c'est l'un des plus grands "
+                   "d'Afrique. Le port de Cotonou dessert aussi le Niger et le Burkina Faso, sans accès à la mer. "
+                   "Accessible ne veut pas dire sans friction : la frontière avec le Niger a par exemple été fermée "
+                   "à plusieurs reprises depuis 2023, à vérifier au moment de décider.")
+        m1, m2 = st.columns(2)
+        for col, values, title, unit in ((m1, pop, "Population", "habitants"),
+                                         (m2, gdp, "PIB", "USD courants")):
+            with col.container(border=True):
+                st.markdown(f"**{title}** · cumulée par zone, dernière année publiée")
+                fig = go.Figure()
+                for iso in [FOCUS, *BORDERS, *[i for i in peer_isos if i not in BORDERS]]:
+                    if iso not in values.index:
+                        continue
+                    fig.add_trace(go.Bar(
+                        y=[z for z, _ in zones], x=[values[iso] if iso in members else 0 for _, members in zones],
+                        name=names[iso], orientation="h", marker=dict(color=COLORS[iso], line=dict(width=1, color="white")),
+                        hovertemplate=f"{names[iso]} : {fmt(values[iso], unit)}<extra></extra>",
+                    ))
+                totals = [values.reindex(members).sum() for _, members in zones]
+                for (zone, _), total in zip(zones, totals):
+                    fig.add_annotation(x=total, y=zone, text=f"<b>{fmt(total, unit)}</b>", xanchor="left",
+                                       xshift=6, showarrow=False)
+                style_fig(fig, height=260)
+                fig.update_layout(barmode="stack", bargap=0.35, margin=dict(l=10, r=80, t=10, b=10),
+                                  legend=dict(orientation="h", y=-0.15, x=0, traceorder="normal"))
+                fig.update_xaxes(showticklabels=False, showgrid=False)
+                fig.update_yaxes(autorange="reversed")
+                st.plotly_chart(fig, width="stretch")
+
+        market_codes = ["SP.POP.1564.TO.ZS", "SL.TLF.TOTL.IN", "NY.GDP.PCAP.PP.CD"]
+        indicator_cards(invest_rows[invest_rows.indicator_code.isin(market_codes)], focus_series,
+                        "médiane des voisins")
+
+        sectors = [c for c in SECTOR_COLORS if c in invest_codes]
+        if sectors:
+            with st.container(border=True):
+                st.markdown("**Structure de l'économie** · part de chaque secteur dans le PIB, dernière année publiée")
+                order = [FOCUS, *sorted(peer_isos, key=lambda i: names[i])]
+                fig = go.Figure()
+                for code in sectors:
+                    v = latest_of(code).reindex(order)
+                    label = indicators.set_index("indicator_code").loc[code, "label_fr"].removesuffix(" (valeur ajoutée)")
+                    fig.add_trace(go.Bar(
+                        y=[names[i] for i in order], x=v.values, name=label, orientation="h",
+                        marker=dict(color=SECTOR_COLORS[code], line=dict(width=1, color="white")),
+                        text=[f"{x:.0f} %" if pd.notna(x) else "" for x in v.values], textposition="inside",
+                        insidetextanchor="middle", hovertemplate=f"%{{y}} · {label} : %{{x:.1f}} % du PIB<extra></extra>",
+                    ))
+                style_fig(fig, height=330)
+                fig.update_layout(barmode="stack", bargap=0.3,
+                                  legend=dict(orientation="h", y=1.08, x=0, traceorder="normal"),
+                                  margin=dict(l=10, r=10, t=40, b=10))
+                fig.update_xaxes(showticklabels=False, showgrid=False)
+                fig.update_yaxes(autorange="reversed")
+                st.plotly_chart(fig, width="stretch")
+                st.caption("Le reste du PIB correspond aux impôts nets sur les produits. Un poids élevé de "
+                           "l'agriculture signale à la fois une dépendance et des besoins de transformation "
+                           "(agro-industrie, logistique, stockage).")
+
+        # --- 2. Stabilité ---
+        st.space("small")
+        st.subheader("2. La stabilité")
+        st.caption("Un investisseur préfère une croissance régulière et des prix stables : ses coûts et ses "
+                   "revenus restent prévisibles.")
+        s1, s2 = st.columns(2)
+        if not stability.empty:
+            with s1.container(border=True):
+                st.markdown(f"**Croissance et régularité** · {vol_years[0] + 1}-{last_year}")
+                fig = go.Figure()
+                for iso, r in stability.iterrows():
+                    focus = iso == FOCUS
+                    fig.add_trace(go.Scatter(
+                        x=[r.growth_sd], y=[r.growth_mean], mode="markers+text", name=names[iso],
+                        text=[f"<b>{names[iso]}</b>" if focus else names[iso]],
+                        textposition="middle right" if focus else "top center",
+                        marker=dict(size=18 if focus else 12, color=COLORS[iso], line=dict(width=2, color="white")),
+                        hovertemplate=f"{names[iso]}<br>croissance moyenne : %{{y:.1f}} %<br>"
+                                      "écart-type : %{x:.1f} pts<extra></extra>",
+                        showlegend=False,
+                    ))
+                style_fig(fig, height=360)
+                fig.update_xaxes(title="Irrégularité de la croissance (écart-type, points) →")
+                fig.update_yaxes(title="Croissance moyenne (%) →")
+                st.plotly_chart(fig, width="stretch")
+                st.caption("En haut à gauche : croissance forte et régulière. En bas à droite : faible et heurtée.")
+            with s2.container(border=True):
+                st.markdown(f"**Inflation moyenne** · {vol_years[0] + 1}-{last_year}")
+                inf = stability.infl_mean.sort_values(ascending=False)
+                fig = go.Figure(go.Bar(
+                    x=inf.values, y=[names[i] for i in inf.index], orientation="h",
+                    marker=dict(color=[COLORS[i] for i in inf.index], cornerradius=4),
+                    customdata=stability.infl_sd.reindex(inf.index).values,
+                    text=[f"{v:.1f} %" for v in inf.values], textposition="outside", cliponaxis=False,
+                    hovertemplate="%{y} : %{x:.1f} % par an en moyenne<br>écart-type : %{customdata:.1f} pts"
+                                  "<extra></extra>",
+                ))
+                style_fig(fig, height=360)
+                fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=60, t=10, b=10))
+                fig.update_xaxes(showticklabels=False, showgrid=False)
+                st.plotly_chart(fig, width="stretch")
+                infl_sd = stability.infl_sd
+                st.caption(f"Variabilité d'une année à l'autre (écart-type) : {infl_sd.get(FOCUS):.1f} pts au "
+                           f"{focus_name}, de {infl_sd.min():.1f} à {infl_sd.max():.1f} pts chez les 7 pays. "
+                           "Survolez une barre pour le détail.")
+
+        if fx_base is not None and len(fx.columns):
+            with st.container(border=True):
+                st.markdown(f"**Valeur de la monnaie face au dollar** · base 100 en {fx_base}")
+                uemoa = countries.loc[countries.is_uemoa, "country_iso3"].tolist()
+                others = [i for i in fx.columns if i not in uemoa]
+                fig = go.Figure()
+                lines = [(FOCUS, "Franc CFA (XOF) — " + ", ".join(names[i] for i in sorted(uemoa, key=lambda i: i != FOCUS)))]
+                lines += [(i, f"Monnaie de {names[i]}" if i != "NGA" else "Naira (NGN) — Nigeria") for i in others]
+                for iso, label in lines:
+                    s = fx[iso].dropna()
+                    if fx_base not in s.index:
+                        continue
+                    idx = s.loc[fx_base] / s * 100
+                    fig.add_trace(go.Scatter(
+                        x=idx.index, y=idx.values, name=label, mode="lines",
+                        line=dict(color=COLORS[iso], width=4 if iso == FOCUS else 2.5),
+                        hovertemplate=f"{label.split(' — ')[0]} · %{{x}} : %{{y:.0f}}<extra></extra>",
+                    ))
+                fig.add_hline(y=100, line=dict(color=NEUTRAL, dash="dot", width=1))
+                style_fig(fig, height=320)
+                fig.update_layout(legend=dict(orientation="h", y=-0.2, x=0), hovermode="x unified")
+                fig.update_yaxes(title=None, ticksuffix="")
+                st.plotly_chart(fig, width="stretch")
+                ngn = fx.get("NGA")
+                if ngn is not None and fx_base in ngn.dropna().index:
+                    loss = 1 - ngn.dropna().loc[fx_base] / ngn.dropna().iloc[-1]
+                    st.caption(
+                        f"Depuis {fx_base}, le naira a perdu {loss:.0%} de sa valeur face au dollar ; le franc CFA, "
+                        "arrimé à l'euro et partagé par 8 pays de l'UEMOA, est resté stable. Pour un investisseur, "
+                        "c'est un risque de change bien plus faible au Bénin qu'au Nigeria.".replace("%", " %")
+                    )
+
+        # --- 3. Climat des affaires ---
+        st.space("small")
+        st.subheader("3. Financement et ouverture")
+        st.caption("Peut-on emprunter localement ? D'autres investisseurs étrangers viennent-ils déjà ? "
+                   "L'économie commerce-t-elle avec le reste du monde ?")
+        climate_codes = ["FS.AST.PRVT.GD.ZS", "BX.KLT.DINV.WD.GD.ZS", "BX.KLT.DINV.CD.WD", "NE.TRD.GNFS.ZS"]
+        indicator_cards(invest_rows[invest_rows.indicator_code.isin(climate_codes)], focus_series,
+                        "médiane des voisins")
+        climate_labels = indicators.set_index("indicator_code").label_fr.reindex(climate_codes).dropna()
+        with st.container(border=True):
+            pick = st.segmented_control("Comparer les 7 pays sur", list(climate_labels.index),
+                                        format_func=climate_labels.get, default=climate_labels.index[0],
+                                        required=True, key="invest_pick")
+            unit = indicators.set_index("indicator_code").loc[pick, "unit_fr"]
+            # Moyenne sur 5 ans pour les IDE, très volatils d'une année à l'autre
+            hist = series_of(pick)
+            window_start = hist.index.max() - 4 if len(hist) else None
+            avg = hist.loc[window_start:].mean().sort_values() if window_start is not None else pd.Series(dtype=float)
+            fig = go.Figure(go.Bar(
+                x=avg.values, y=[names[i] for i in avg.index], orientation="h",
+                marker=dict(color=[COLORS[i] for i in avg.index], cornerradius=4),
+                text=[fmt(v, unit) for v in avg.values], textposition="outside", cliponaxis=False,
+                hovertemplate="%{y} : %{x:,.1f}<extra></extra>",
+            ))
+            style_fig(fig, height=320)
+            fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=90, t=10, b=10))
+            fig.update_xaxes(showticklabels=False, showgrid=False)
+            st.plotly_chart(fig, width="stretch")
+            st.caption(f"Moyenne {int(window_start)}-{int(hist.index.max())} ({unit}), pour lisser les à-coups "
+                       "d'une année sur l'autre. IDE : investissements directs étrangers. Crédit au secteur privé : "
+                       "prêts des banques aux entreprises et aux ménages.")
+
+        st.info(
+            "**Pour aller plus loin.** Les indicateurs de gouvernance de la Banque mondiale (qualité de la "
+            "réglementation, État de droit, stabilité politique) seront ajoutés prochainement. Le classement "
+            "*Doing Business* n'est pas utilisé : la Banque mondiale l'a arrêté en 2021 après des irrégularités.",
+            icon=":material/lightbulb:",
+        )
+        st.caption("Ces analyses éclairent une décision à partir de statistiques publiques ; elles ne constituent "
+                   "pas un conseil en investissement. Source : World Bank, World Development Indicators.")
+
 # --- Comparer ----------------------------------------------------------------
 with tab_compare:
-    options = dict(zip(scorecard.label_fr, scorecard.indicator_code))
+    options = dict(zip(scorecard_all.label_fr, scorecard_all.indicator_code))
     labels = sorted(options)
     st.space("small")
     with st.container(border=True):
@@ -775,7 +1049,7 @@ with tab_about:
             """
 :material/database: **Sources**
 
-- *World Bank — World Development Indicators*, API publique v2.
+- *World Bank — World Development Indicators*, API publique v2 : indicateurs du tableau de bord et de l'onglet Investir.
 - *INStaD — catalogue de microdonnées (NADA)* : métadonnées des enquêtes uniquement.
 - *Open Data for Africa — Bénin* (BAD) : inventaire des jeux via l'API du portail (titre, producteur, mise à jour, licence).
 - *data.gouv.bj* : fichiers téléchargés à la main (le portail n'autorise pas la collecte automatisée), avec URL et date de téléchargement tracées.
