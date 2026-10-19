@@ -28,6 +28,8 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   (à garder aligné avec le SQL) ; sélecteur lié à l'URL (`?pays=Togo`, libellé du pays).
   `app/odfa_catalog.py` : titres ODFA lisibles depuis les slugs, thème estimé par mots-clés, famille de producteur.
   Lit DuckDB en local, ou `exports/*.parquet` une fois hébergé. Streamlit ≥ 1.50 (metrics avec sparklines, badges).
+  `query()` est en `@st.cache_data(ttl=3600)` : après un commit d'exports, l'app en ligne garde les anciennes
+  données jusqu'à 1 h (redéployer le code ne vide pas ce cache). Pour forcer : « Reboot app » sur share.streamlit.io.
   Thème dans `.streamlit/config.toml` (vert Bénin `#0F7B4B`, Inter / Space Grotesk, clair imposé).
   Couleurs des pays attribuées par code ISO, jamais par rang : le Bénin en vert, chaque voisin sa couleur.
 - `.github/workflows/refresh.yml` : tests à chaque push et PR ; collecte réelle chaque lundi 05:17 UTC
@@ -51,18 +53,20 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 
 ## État au 2026-10-19
 - ✅ Dépôt public https://github.com/Yann2808/benin-open-data-hub (PR #1 mergée : ODFA + refonte du dashboard).
-- ⏳ Onglet « Investir au Bénin » : PR #5 vers `main`, à merger puis lancer le workflow refresh (la PR #4 visait
-  la mauvaise branche).
+- ✅ Onglet « Investir au Bénin » en ligne (PR #5 ; la PR #4 visait la mauvaise branche). Refresh du 2026-10-19 :
+  23 indicateurs (12 tableau de bord + 11 investir), 4 105 valeurs dans les exports.
 - ✅ Dashboard public : https://bj-odh.streamlit.app/ (Streamlit Community Cloud, branche `main`,
   fichier `app/streamlit_app.py`, visibilité publique). Redéploiement automatique à chaque commit sur `main`.
-- ✅ Collecte World Bank réelle OK (2 133 valeurs dans les exports, jusqu'à 2025), dbt OK.
+- ✅ Collecte World Bank réelle OK (jusqu'à 2025), dbt OK.
 - ✅ Catalogue ODFA : 1 107 jeux inventoriés ; ❌ valeurs non collectées (403 Cloudflare, voir plus haut).
 - ❌ INStaD (nada.instad.bj) : tout le site en maintenance (404/503) au 2026-10-12. Source optionnelle, on attend.
 
 ## Prochaines étapes
-1. Accès API ODFA (identifiants) pour collecter les valeurs ; humaniser les titres des jeux (slugs).
-2. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
-3. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
+1. Cache de l'app : ajouter la date de modification de `exports/*.parquet` à la clé de `query()`, pour que
+   chaque refresh soit visible tout de suite.
+2. Accès API ODFA (identifiants) pour collecter les valeurs ; humaniser les titres des jeux (slugs).
+3. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
+4. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
 
 ## Conventions
 - Code et commentaires en français, noms de variables en anglais.
