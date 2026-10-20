@@ -1163,8 +1163,9 @@ with tab_catalog:
         occ = gbif[gbif.metric == "occurrences"]
         pub = gbif[gbif.metric == "jeux publiés"]
         b1, b2 = st.columns(2)
-        b1.metric("Occurrences observées au Bénin", f"{int(occ.value.sum()):,}".replace(",", "\u202f"), border=True,
-                  help="Observations d'espèces localisées au Bénin, toutes années confondues.")
+        b1.metric("Occurrences datées observées au Bénin", f"{int(occ.value.sum()):,}".replace(",", "\u202f"),
+                  border=True, help="Observations d'espèces localisées au Bénin et datées (somme par année "
+                                    "d'observation) ; les occurrences sans année ne sont pas comptées.")
         b2.metric("Jeux publiés par des organismes béninois", int(pub.value.sum()), border=True)
         with st.container(border=True):
             st.markdown("**Occurrences par année d'observation** · depuis 1990")
