@@ -329,6 +329,10 @@ try:
 except duckdb.Error:  # entrepôt ou exports antérieurs au baromètre
     availability = pd.DataFrame()
 try:
+    gbif = query("select * from marts.mart_gbif_yearly order by metric, year")
+except duckdb.Error:  # entrepôt ou exports antérieurs à GBIF
+    gbif = pd.DataFrame()
+try:
     odin_scores = query("select * from marts.mart_odin_scores order by edition_year, country_iso3")
 except duckdb.Error:  # entrepôt ou exports antérieurs à ODIN
     odin_scores = pd.DataFrame()
@@ -1082,13 +1086,15 @@ with tab_catalog:
     st.space("small")
     st.markdown(
         "Tout ce que le hub sait des données disponibles sur le Bénin, au même endroit : indicateurs "
-        "suivis, jeux du portail Open Data for Africa, enquêtes de l'INStaD et fichiers ouverts ajoutés "
-        "à la main (data.gouv.bj)."
+        "suivis, jeux du portail Open Data for Africa et de HDX, enquêtes de l'INStaD, fichiers ouverts ajoutés "
+        "à la main (data.gouv.bj) et sources seulement référencées, faute de licence ou d'API "
+        "(budget, ARCEP, IGN)."
     )
     counts = catalog.kind.value_counts()
     if len(counts):
         for col, (kind, n) in zip(st.columns(len(counts) + 1), counts.items()):
-            plural = {"jeu de données": "jeux de données", "fichier déposé": "fichiers déposés"}.get(kind, kind + "s")
+            plural = {"jeu de données": "jeux de données", "fichier déposé": "fichiers déposés",
+                      "source référencée": "sources référencées"}.get(kind, kind + "s")
             col.metric((plural if n > 1 else kind).capitalize(), int(n), border=True)
 
     with st.container(border=True):
@@ -1118,6 +1124,26 @@ with tab_catalog:
     c1.caption(f"{len(view)} entrée(s).")
     c2.download_button("Télécharger (CSV)", to_csv(view[columns]), file_name="catalogue_benin.csv",
                        mime="text/csv", icon=":material/download:", width="stretch")
+    if not gbif.empty:
+        st.space("small")
+        st.subheader("Biodiversité : le Bénin sur GBIF")
+        occ = gbif[gbif.metric == "occurrences"]
+        pub = gbif[gbif.metric == "jeux publiés"]
+        b1, b2 = st.columns(2)
+        b1.metric("Occurrences observées au Bénin", f"{int(occ.value.sum()):,}".replace(",", "\u202f"), border=True,
+                  help="Observations d'espèces localisées au Bénin, toutes années confondues.")
+        b2.metric("Jeux publiés par des organismes béninois", int(pub.value.sum()), border=True)
+        with st.container(border=True):
+            st.markdown("**Occurrences par année d'observation** · depuis 1990")
+            recent = occ[occ.year >= 1990]
+            fig = go.Figure(go.Bar(x=recent.year, y=recent.value, marker=dict(color=FOCUS_COLOR, cornerradius=3),
+                                   hovertemplate="%{x} : %{y:,} occurrences<extra></extra>"))
+            style_fig(fig, height=260)
+            fig.update_layout(showlegend=False, bargap=0.2)
+            st.plotly_chart(fig, width="stretch")
+            st.caption("Source : [GBIF](https://www.gbif.org/country/BJ/summary), API publique ; licence propre "
+                       "à chaque jeu (CC0, CC BY, CC BY-NC). Agrégats seulement : les occurrences ne sont pas copiées.")
+
     if hidden_demo:
         st.info(
             f"{hidden_demo} entrée(s) de démonstration masquée(s) : le catalogue INStaD (NADA) est "
