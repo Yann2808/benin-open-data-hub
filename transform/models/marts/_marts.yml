@@ -152,3 +152,19 @@ models:
               arguments:
                 to: ref('dim_country')
                 field: country_iso3
+
+  - name: mart_gbif_yearly
+    description: >
+      Biodiversité au Bénin (GBIF) : occurrences par année d'observation et jeux publiés par des
+      organismes béninois par année d'enregistrement. Agrégats seulement.
+    columns:
+      - name: gbif_id
+        data_tests: [unique, not_null]
+      - name: metric
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [occurrences, jeux publiés]
+      - name: value
+        data_tests: [not_null]
