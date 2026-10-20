@@ -18,7 +18,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import health, manual, nada, odfa, worldbank
+from . import health, manual, nada, odfa, odin, worldbank
 from .common import ROOT, drop_demo_rows, ensure_raw_table, load_config, load_raw_table, upsert_raw_table, write_snapshot
 
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -27,7 +27,7 @@ DEMO_MARKERS = {
     "wb_observations": ("source_last_updated", "DEMO-SYNTHETIQUE"),
     "nada_studies": ("idno", "DEMO-"),
 }
-SOURCES = ("worldbank", "nada", "manual", "odfa", "health")
+SOURCES = ("worldbank", "nada", "manual", "odfa", "odin", "health")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     ensure_raw_table("odfa_fetch_log", odfa.LOG_COLUMNS)
     ensure_raw_table("source_health", health.COLUMNS)
     ensure_raw_table("wb_indicator_meta", worldbank.META_COLUMNS)
+    ensure_raw_table("odin_scores", odin.COLUMNS)
 
     # Collecte réelle : on retire d'abord les restes d'un `make demo`, pour que
     # « dernière collecte conservée » ne mélange jamais démo et vraies données.
@@ -108,6 +109,16 @@ def main(argv: list[str] | None = None) -> int:
         log.info("raw.odfa_observations : %s lignes", odfa.load_observations())
     else:
         odfa.load_observations(FIXTURES / "odfa_empty")  # table vide en démo
+
+    # Sources optionnelles ajoutées après l'audit du 2026-10-20 (docs/audit_sources.md) :
+    # jamais en démo (on n'invente pas de valeurs), un échec garde la dernière collecte.
+    if "odin" in selected and not args.offline:
+        try:
+            countries = [cfg["worldbank"]["focus_country"], *cfg["worldbank"]["peer_countries"]]
+            n = load_raw_table("odin_scores", odin.fetch_all(cfg["odin"], countries), odin.COLUMNS)
+            log.info("raw.odin_scores : %s lignes", n)
+        except Exception as err:  # noqa: BLE001
+            log.warning("ODIN indisponible : %s — dernière collecte conservée", err)
 
     # Baromètre de l'accès aux données : jamais en démo (pas de réseau), jamais bloquant.
     if "health" in selected and not args.offline:

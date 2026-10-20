@@ -215,8 +215,20 @@ source_health:
     official_api: true
     license: variable selon le jeu
     collection_policy: autorisée
+  - source: ODIN — Open Data Inventory (Open Data Watch)
+    # API du site public, non documentée : comptée comme non officielle
+    url: https://odin-aim.akroninc.net/api/api/client/GetLastUpdatedDate
+    official_api: false
+    license: CC BY 4.0
+    collection_policy: autorisée
   - source: data.gouv.bj
     url: https://data.gouv.bj/robots.txt
     official_api: false
     license: variable selon le jeu
     collection_policy: interdite
+
+odin:
+  # Open Data Inventory (Open Data Watch), licence CC BY 4.0. Source optionnelle.
+  # API JSON du site public, non documentée : voir docs/audit_sources.md. Pays : ceux de `worldbank`.
+  api_base: https://odin-aim.akroninc.net/api/api/client
+  pause_seconds: 1
