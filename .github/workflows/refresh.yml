@@ -51,7 +51,8 @@ jobs:
           con = duckdb.connect("warehouse/benin.duckdb", read_only=True)
           for t in ["dim_country", "dim_indicator", "fct_indicator_values",
                     "mart_latest_values", "mart_benin_scorecard", "mart_data_catalog",
-                    "mart_odfa_datasets", "mart_source_availability"]:
+                    "mart_odfa_datasets", "mart_source_availability", "mart_odin_scores",
+                    "mart_gbif_yearly"]:
               con.execute(f"copy marts.{t} to 'exports/{t}.parquet' (format parquet)")
           # Historique complet du baromètre : rechargé à la collecte suivante (entrepôt neuf en CI)
           con.execute("copy raw.source_health to 'exports/source_health.parquet' (format parquet)")
