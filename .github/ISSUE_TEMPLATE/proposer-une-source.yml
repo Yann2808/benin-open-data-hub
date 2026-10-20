@@ -1,0 +1,63 @@
+name: Proposer une source
+description: Signaler une source de données sur le Bénin à ajouter au hub ou à son catalogue.
+title: "[Source] "
+labels: ["source"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci ! Chaque source proposée est auditée avant tout ajout : robots.txt, conditions
+        d'utilisation, licence, existence d'une API (voir `docs/audit_sources.md`).
+        Une source sans licence claire est seulement référencée au catalogue, avec son lien.
+  - type: input
+    id: nom
+    attributes:
+      label: Nom de la source
+      placeholder: ex. Annuaire statistique de l'éducation
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: URL
+      description: Adresse de la page ou de l'API où se trouvent les données.
+      placeholder: https://
+    validations:
+      required: true
+  - type: input
+    id: producteur
+    attributes:
+      label: Producteur
+      description: Institution qui produit ou publie les données.
+      placeholder: ex. INStaD, ministère, agence, ONG
+    validations:
+      required: true
+  - type: input
+    id: licence
+    attributes:
+      label: Licence
+      description: Licence ou conditions de réutilisation affichées. « Inconnue » si rien n'est indiqué.
+      placeholder: ex. CC BY 4.0, Licence ouverte, inconnue
+    validations:
+      required: true
+  - type: dropdown
+    id: format
+    attributes:
+      label: Format
+      multiple: true
+      options:
+        - API
+        - CSV
+        - Excel
+        - JSON
+        - PDF
+        - Carte / SIG (WMS, WFS, GeoJSON, Shapefile)
+        - Page web
+        - Autre
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Précisions
+      description: Période couverte, fréquence de mise à jour, intérêt pour le hub…
