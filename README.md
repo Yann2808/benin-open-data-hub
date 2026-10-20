@@ -13,25 +13,29 @@ Les grands indicateurs du Bénin, comparés à ses voisins d'Afrique de l'Ouest,
 
 | Brique | Contenu |
 |---|---|
-| **Tableau de bord** | 12 indicateurs (démographie, économie, numérique, énergie, éducation, emploi, santé) : dernière valeur, évolution sur 5 ans, rang et position face à la médiane de 6 pays voisins |
+| **Tableau de bord** | 14 indicateurs (démographie, économie, numérique, énergie, éducation, emploi, santé) : dernière valeur, évolution sur 5 ans, rang et position face à la médiane de 6 pays voisins ; définition officielle, unité, année et source dans l'infobulle de chaque chiffre |
 | **Fiche pays** | Le même diagnostic pour chacun des 7 pays (rangs, points forts, courbes) et un face-à-face avec le Bénin ; lien partageable (`?pays=Togo`) |
 | **Investir au Bénin** | Pour entrepreneurs et investisseurs : taille du marché (avec les pays frontaliers), structure de l'économie, stabilité (croissance, inflation, monnaie face au dollar), crédit, IDE et ouverture commerciale |
-| **Comparer** | Séries temporelles du Bénin face à ses pairs, indicateur par indicateur |
-| **Open Data for Africa** | Inventaire des 1 107 jeux du portail de la BAD : titres lisibles, thème estimé, producteur, fraîcheur, recherche et filtres |
-| **Catalogue** | Tout ce que le hub connaît : indicateurs, enquêtes de l'INStaD, jeux du portail Open Data for Africa (BAD), fichiers data.gouv.bj déposés, avec source, période, licence et lien |
+| **Comparer** | Séries temporelles du Bénin face à ses pairs, indicateur par indicateur, avec définition et téléchargement CSV complet (7 pays, toutes années, statut de collecte, source) |
+| **Open Data for Africa** | Inventaire des 1 107 jeux du portail de la BAD : titres lisibles, thème estimé, producteur, âge des jeux (mis à jour depuis 2024, entre 2020 et 2023, avant 2020) par producteur, recherche et filtres |
+| **Catalogue** | Tout ce que le hub connaît : indicateurs, enquêtes de l'INStaD, jeux d'Open Data for Africa (BAD) et de HDX (OCHA), biodiversité (GBIF), fichiers data.gouv.bj déposés et sources seulement référencées (budget, ARCEP, IGN), avec source, période, licence et lien ; export CSV complet et formulaire « Proposer une source » |
+| **Accès aux données** | Baromètre : chaque source testée à chaque collecte (joignable, en panne, collecte interdite), taux de disponibilité, dernière réponse réussie ; scores ODIN d'ouverture des statistiques officielles |
 
 ## Architecture
 
 ```
 World Bank API ─┐
-INStaD (NADA) ──┼─► ingestion/ (Python) ─► DuckDB raw.* ─► dbt (staging → marts + tests) ─► Streamlit
-Open Data       │   retries, snapshots       warehouse/       38 tests de qualité              app/
- for Africa ─────┤   JSONL / Parquet
-data.gouv.bj ───┘
- (dépôt manuel)
+INStaD (NADA) ──┤
+Open Data       │
+ for Africa ────┼─► ingestion/ (Python) ─► DuckDB raw.* ─► dbt (staging → marts + tests) ─► Streamlit
+ODIN, GBIF, HDX ┤   retries, snapshots       warehouse/       51 tests de qualité              app/
+data.gouv.bj ───┤   baromètre d'accès
+ (dépôt manuel) │
+toutes sources ─┘   (test HTTP à chaque collecte → raw.source_health, historique cumulé)
 ```
 
-- **Ingestion** (`ingestion/`) : une source en panne ne bloque pas les autres. Chaque collecte est gardée en JSONL horodaté dans `data/raw/` pour pouvoir rejouer les transformations.
+- **Ingestion** (`ingestion/`) : une source en panne ne bloque pas les autres. Chaque collecte est gardée en JSONL horodaté dans `data/raw/` pour pouvoir rejouer les transformations. Le baromètre (`ingestion/health.py`) teste chaque source déclarée, y compris celles seulement cataloguées.
+- **Audit des sources** (`docs/audit_sources.md`) : robots.txt, licence, API et verdict pour chaque source avant toute collecte.
 - **Transformations** (`transform/`, dbt-duckdb) : typage, dédoublonnage, dimensions, faits, scorecard, catalogue. Tests : unicité, relations, valeurs acceptées, rangs cohérents, pourcentages entre 0 et 100.
 - **Dashboard** (`app/`) : lit DuckDB en local, ou les exports Parquet versionnés une fois hébergé.
 - **CI** (`.github/workflows/refresh.yml`) : tests à chaque push, collecte réelle chaque lundi, export Parquet commité.
@@ -51,6 +55,8 @@ make odfa   # collecte complète d'Open Data for Africa (longue, reprend où ell
 make docs   # documentation dbt et lignage
 ```
 
+Prototype expérimental (non branché sur `make run`) : `python -m ingestion.arcep fichier.pdf` lit un tableau de bord ARCEP déposé à la main et écrit les valeurs, avec leur provenance, dans `data/raw/arcep/` (non versionné). Rien n'est publié tant que l'ARCEP n'a pas donné son accord écrit.
+
 `make demo` sert uniquement à vérifier que tout fonctionne : les valeurs sont générées aléatoirement et le dashboard affiche un bandeau d'avertissement.
 
 **Prérequis** : Python 3.10 à 3.12. Sur un Mac Intel sous macOS 11 ou antérieur, `requirements.txt` fixe automatiquement `pyarrow` en version 17, la dernière publiée précompilée pour ces systèmes. Sans ce garde-fou, pip tente une compilation qui échoue faute de compilateur Rust.
@@ -59,12 +65,17 @@ make docs   # documentation dbt et lignage
 
 - **Un indicateur ou un pays de comparaison** : `config/sources.yml`, aucune modification de code. Le champ `section` choisit l'onglet : tableau de bord (défaut) ou `investir`.
 - **Un fichier de data.gouv.bj** : voir `data/manual/README.md`. Le portail n'autorise pas la collecte automatisée, donc le dépôt est manuel, avec URL et date de téléchargement tracées.
+- **Une source seulement référencée** (sans collecte) : `catalog_sources` dans `config/sources.yml`, et une entrée `source_health` pour le baromètre.
+- **Proposer une source** : [formulaire d'issue](https://github.com/Yann2808/benin-open-data-hub/issues/new?template=proposer-une-source.yml).
 
 ## Méthode
 
 - Pour chaque pays, on prend la dernière valeur publiée. Un pays n'entre dans la comparaison que si sa donnée a moins de 5 ans d'écart avec la plus récente (`comparison_window_years`).
 - Le rang n'est calculé que pour les indicateurs au sens clair (plus d'accès à l'électricité = mieux, plus d'inflation = moins bien). Population et urbanisation sont seulement situées par rapport à la médiane.
 - Les évolutions des indicateurs en % sont données en points, les autres en % relatif.
+- **Inaccessible n'est pas absente** : une source inaccessible ne répond pas au moment du test ; une donnée absente n'est pas publiée par une source qui répond. Le hub ne remplit jamais une case vide.
+- Abonnements et personnes ne se mélangent pas : « abonnements pour 100 habitants » (mobile, haut débit fixe) d'un côté, « personnes utilisant Internet, % de la population » de l'autre.
+- Chaque valeur porte un statut de collecte (collectée / démo) et la date de publication de sa source ; chaque indicateur, sa définition officielle (telle que publiée, parfois en anglais).
 
 ## En ligne
 
@@ -83,8 +94,13 @@ Sur l'offre gratuite, l'app se met en veille après une période sans visite ; l
 - [ ] v0.2 : premiers jeux de données data.gouv.bj (éducation, santé) et carte par commune
 - [ ] v0.2 : indicateurs propres au numérique béninois (ARCEP, ASIN) et à l'agriculture
 - [ ] v0.3 : API publique en lecture (exports Parquet + DuckDB-WASM ou FastAPI)
+- [x] v0.2 : baromètre de l'accès aux sources, définitions officielles, âge des jeux ODFA, ODIN, GBIF, HDX
 - [ ] v1 : fiche « qualité des données » par source (fraîcheur, complétude, trous)
 
 ## Licence
 
-Code sous licence MIT. Les données restent sous la licence de leurs producteurs (World Bank : CC BY 4.0).
+Code sous licence MIT. Les données restent sous la licence de leurs producteurs (World Bank : CC BY 4.0 ; ODIN, Open Data Watch : CC BY 4.0 ; GBIF et HDX : licence propre à chaque jeu).
+
+## Méthode de travail
+
+Le projet est développé avec l'aide de [Claude Code](https://claude.com/claude-code) (Anthropic) : les commits concernés portent la mention `Co-Authored-By: Claude`. Les choix de sources, de licences et de méthode restent relus et décidés par l'auteur.
