@@ -84,13 +84,13 @@ models:
                   - données insuffisantes
 
   - name: mart_data_catalog
-    description: Catalogue unifié des données connues sur le Bénin (indicateurs, enquêtes INStaD, fichiers déposés).
+    description: Catalogue unifié des données connues sur le Bénin (indicateurs, enquêtes INStaD, jeux ODFA et HDX, fichiers déposés, sources seulement référencées).
     columns:
       - name: kind
         data_tests:
           - accepted_values:
               arguments:
-                values: [indicateur, enquête, fichier déposé, jeu de données]
+                values: [indicateur, enquête, fichier déposé, jeu de données, source référencée]
       - name: title
         data_tests: [not_null]
 

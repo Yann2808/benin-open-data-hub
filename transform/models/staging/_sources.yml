@@ -26,3 +26,9 @@ sources:
           (code, temps de réponse, API officielle, licence, politique de collecte). Cumulé, jamais écrasé.
       - name: odin_scores
         description: Scores ODIN (Open Data Watch, CC BY 4.0) par pays et par édition (0 à 100).
+      - name: gbif_yearly
+        description: GBIF, Bénin — occurrences par année d'observation et jeux publiés par année d'enregistrement.
+      - name: hdx_datasets
+        description: Catalogue HDX (OCHA) des jeux concernant le Bénin (groupe ben), métadonnées seulement.
+      - name: catalog_sources
+        description: Sources auditées mais seulement cataloguées (config `catalog_sources`), sans collecte.
