@@ -93,3 +93,32 @@ models:
           - accepted_values:
               arguments:
                 values: [ok, échec, non collecté]
+
+  - name: mart_source_availability
+    description: >
+      Baromètre de l'accès aux données : une ligne par source testée, avec le dernier statut,
+      le taux de disponibilité sur tout l'historique et la date de la dernière réponse réussie.
+      « En panne » = la source ne répond pas ; cela ne dit rien de l'existence de la donnée.
+    columns:
+      - name: source
+        data_tests: [unique, not_null]
+      - name: last_tested_at
+        data_tests: [not_null]
+      - name: badge
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [joignable, en panne, collecte interdite]
+      - name: reachability
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [joignable, en panne]
+      - name: collection_policy
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [autorisée, catalogue seulement, interdite]
+      - name: n_tests
+        data_tests: [not_null]
