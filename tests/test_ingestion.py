@@ -260,3 +260,16 @@ def test_http_client_fake_session_stops_on_client_error():
     with pytest.raises(RuntimeError):
         client.get_json("https://api.example/missing")
     assert len(client.session.calls) == 1
+
+
+def test_catalog_sources_default_status_and_columns():
+    rows = manual.catalog_sources([{"title": "T", "url": "https://x", "producer": "P"},
+                                   {"title": "U", "status": "expérimental"}])
+    assert rows[0]["status"] == "référencée" and rows[1]["status"] == "expérimental"
+    assert all(set(r) == set(manual.CATALOG_COLUMNS) for r in rows)
+    assert manual.catalog_sources(None) == []
+
+
+def test_config_catalog_sources_have_title_and_url():
+    for s in common.load_config()["catalog_sources"]:
+        assert s["title"] and s["url"].startswith("http")

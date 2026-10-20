@@ -65,3 +65,12 @@ def _reader(path: Path) -> str:
     if suffix in (".json", ".jsonl"):
         return "read_json_auto"
     raise ValueError(f"Format non géré : {path.name} (csv, parquet, json). Convertis les .xlsx en .csv.")
+
+
+# --- Sources seulement cataloguées (config `catalog_sources`) ------------------------------
+CATALOG_COLUMNS = ["title", "producer", "topic", "url", "access", "status"]
+
+
+def catalog_sources(cfg: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Sources référencées sans collecte : une ligne par source, statut « référencée » par défaut."""
+    return [{**{c: s.get(c) for c in CATALOG_COLUMNS}, "status": s.get("status", "référencée")} for s in cfg or []]

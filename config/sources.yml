@@ -231,6 +231,22 @@ source_health:
     official_api: true
     license: variable selon le jeu (CC BY majoritaire)
     collection_policy: autorisée
+  # Sources seulement cataloguées (voir catalog_sources ci-dessous) : on teste la page publique
+  - source: Données budgétaires (DGB)
+    url: https://opendata.budgetbenin.bj/
+    official_api: false
+    license: non précisée
+    collection_policy: catalogue seulement
+  - source: ARCEP Bénin — Observatoire de l'Internet
+    url: https://arcep.bj/internet/
+    official_api: false
+    license: reproduction interdite sans accord écrit
+    collection_policy: catalogue seulement
+  - source: IGN Bénin — base de données spatiales
+    url: https://ign.bj/webmap/
+    official_api: false
+    license: non précisée
+    collection_policy: catalogue seulement
   - source: data.gouv.bj
     url: https://data.gouv.bj/robots.txt
     official_api: false
@@ -253,3 +269,24 @@ hdx:
   site: https://data.humdata.org
   group: ben
   page_size: 500
+
+catalog_sources:
+  # Sources auditées mais non collectées (licence absente ou restrictive, pas d'API) :
+  # référencées au catalogue avec leur lien. Voir docs/audit_sources.md.
+  - title: Base de données financière de la Direction générale du Budget
+    producer: Direction générale du Budget (DGB)
+    topic: Finances publiques
+    url: https://opendata.budgetbenin.bj/
+    access: catalogue seulement (licence non précisée)
+  - title: Observatoire de l'Internet — tableaux de bord trimestriels (PDF)
+    producer: ARCEP Bénin
+    topic: Numérique
+    url: https://arcep.bj/internet/
+    access: catalogue seulement (reproduction soumise à accord écrit)
+    status: expérimental
+  - title: Base de données spatiales des unités administratives
+    producer: IGN Bénin
+    topic: Géographie
+    url: https://ign.bj/webmap/
+    access: catalogue seulement (licence non précisée)
+

@@ -104,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     if "manual" in selected:
         entries = manual.load_all(cfg["manual"])
         load_raw_table("manual_registry", entries, manual.REGISTRY_COLUMNS)
+    # Sources seulement cataloguées : issues de la config, toujours rechargées
+    load_raw_table("catalog_sources", manual.catalog_sources(cfg.get("catalog_sources")), manual.CATALOG_COLUMNS)
 
     if "odfa" in selected and not args.offline:
         _run_odfa(cfg["odfa"], collect_data=bool(args.only and "odfa" in args.only), refresh=args.refresh, log=log)
