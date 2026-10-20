@@ -39,6 +39,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Collecte des vraies sources
         # Une source en panne est signalée mais n'empêche pas de publier les autres.
+        # Inclut le baromètre de l'accès aux sources (historique repris de exports/source_health.parquet).
         run: python -m ingestion.run || echo "::warning::Au moins une source en échec, voir les logs de collecte"
       - name: Transformations et tests de qualité
         run: cd transform && dbt build --profiles-dir .
@@ -50,8 +51,10 @@ jobs:
           con = duckdb.connect("warehouse/benin.duckdb", read_only=True)
           for t in ["dim_country", "dim_indicator", "fct_indicator_values",
                     "mart_latest_values", "mart_benin_scorecard", "mart_data_catalog",
-                    "mart_odfa_datasets"]:
+                    "mart_odfa_datasets", "mart_source_availability"]:
               con.execute(f"copy marts.{t} to 'exports/{t}.parquet' (format parquet)")
+          # Historique complet du baromètre : rechargé à la collecte suivante (entrepôt neuf en CI)
+          con.execute("copy raw.source_health to 'exports/source_health.parquet' (format parquet)")
           EOF
       - name: Commit des exports
         run: |
