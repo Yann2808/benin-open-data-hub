@@ -794,7 +794,7 @@ with tab_compare:
         c1, c2 = st.columns([2, 3])
         choice = c1.selectbox(
             "Indicateur", labels,
-            index=labels.index("Utilisateurs d'Internet") if "Utilisateurs d'Internet" in labels else 0,
+            index=labels.index("Personnes utilisant Internet") if "Personnes utilisant Internet" in labels else 0,
         )
         selected_peers = c2.multiselect(f"Pays comparés au {focus_name}", peer_names, default=peer_names)
         code = options[choice]

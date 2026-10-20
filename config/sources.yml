@@ -50,14 +50,16 @@ worldbank:
       unit: "% annuel"
       higher_is_better: false
     - code: IT.NET.USER.ZS
-      label: Utilisateurs d'Internet
+      # Personnes (et non abonnements) : ne jamais confondre avec les indicateurs « pour 100 habitants »
+      label: Personnes utilisant Internet
       theme: Numérique
       unit: "% de la population"
       higher_is_better: true
     - code: IT.CEL.SETS.P2
-      label: Abonnements mobiles
+      # Abonnements (une personne peut en avoir plusieurs) : ce n'est pas une part de la population
+      label: Abonnements à la téléphonie mobile
       theme: Numérique
-      unit: pour 100 habitants
+      unit: abonnements pour 100 habitants
       higher_is_better: true
     - code: EG.ELC.ACCS.ZS
       label: Accès à l'électricité
