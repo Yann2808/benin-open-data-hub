@@ -213,13 +213,39 @@ def indicator_cards(rows: pd.DataFrame, history: pd.DataFrame, median_label: str
                 else ("normal" if row.higher_is_better else "inverse"),
                 delta_description=("⚠️ " if row.is_stale else "") + short,
                 icon=THEMES.get(row.theme, ":material/label:"),
-                help=f"{row.theme} · unité : {row.unit_fr}. {row.position_vs_peers.capitalize()} "
-                     f"({median_label} : {fmt(row.peer_median, row.unit_fr)}).{stale} "
-                     f"Source : World Bank, indicateur {row.indicator_code}.",
+                help=f"{row.theme} · unité : {row.unit_fr}"
+                     + ("" if pd.isna(row.latest_year) else f" · valeur de {int(row.latest_year)}")
+                     + f". {row.position_vs_peers.capitalize()} "
+                     f"({median_label} : {fmt(row.peer_median, row.unit_fr)}).{stale}\n\n"
+                     f"{definition_text(row.indicator_code)}\n\n{source_line(row.indicator_code)}",
                 chart_data=values if len(values) > 1 else None,
                 chart_type="area",
                 border=True,
             )
+
+
+def source_line(code: str) -> str:
+    """« Source : World Bank (organisme), indicateur X, publié le JJ/MM/AAAA »."""
+    m = INDICATOR_META.loc[code]
+    org = f" ({m.source_organization.rstrip('. ')})" if pd.notna(m.source_organization) else ""
+    published = f", publié le {fmt_date(m.source_published_on)}" if pd.notna(m.source_published_on) else ""
+    return f"Source : {m.source_name}{org}, indicateur {code}{published}."
+
+
+def definition_text(code: str) -> str:
+    """Définition telle que publiée par la source (souvent en anglais), sinon le dire."""
+    definition = INDICATOR_META.loc[code, "definition"]
+    if pd.isna(definition):
+        return "Définition non disponible : métadonnées de la source pas encore collectées (`make run`)."
+    return f"Définition de la source : {definition}"
+
+
+def definition_md(code: str) -> str:
+    """Bloc complet à côté d'un chiffre : nom officiel, définition, unité, source."""
+    m = INDICATOR_META.loc[code]
+    official = f" · nom officiel : *{m.name_source}*" if pd.notna(m.name_source) else ""
+    return (f"**{m.label_fr}** · unité : {m.unit_fr}{official}  \n{definition_text(code)}  \n"
+            f"[{source_line(code)}]({m.source_url})")
 
 
 def country_profile(iso: str) -> pd.DataFrame:
@@ -275,6 +301,11 @@ indicators = query("select * from marts.dim_indicator")
 if "section" not in indicators.columns:
     indicators["section"] = "tableau de bord"
 dashboard_codes = set(indicators.loc[indicators.section == "tableau de bord", "indicator_code"])
+# Définitions officielles (exports antérieurs sans métadonnées : colonnes vides)
+for col in ("name_source", "definition", "source_organization", "source_published_on"):
+    if col not in indicators.columns:
+        indicators[col] = None
+INDICATOR_META = indicators.set_index("indicator_code")
 scorecard_all = scorecard
 scorecard = scorecard_all[scorecard_all.indicator_code.isin(dashboard_codes)]
 latest = query(
@@ -782,6 +813,9 @@ with tab_invest:
             "*Doing Business* n'est pas utilisé : la Banque mondiale l'a arrêté en 2021 après des irrégularités.",
             icon=":material/lightbulb:",
         )
+        with st.expander("Définitions des indicateurs de cet onglet", icon=":material/menu_book:"):
+            for code in indicators.loc[indicators.section == "investir", "indicator_code"]:
+                st.markdown(definition_md(code))
         st.caption("Ces analyses éclairent une décision à partir de statistiques publiques ; elles ne constituent "
                    "pas un conseil en investissement. Source : World Bank, World Development Indicators.")
 
@@ -816,6 +850,9 @@ with tab_compare:
             years = st.slider("Période", int(series.year.min()), int(series.year.max()),
                               (int(series.year.min()), int(series.year.max())))
             series = series[series.year.between(*years)]
+
+    with st.expander("Définition, unité et source", icon=":material/menu_book:"):
+        st.markdown(definition_md(code))
 
     if series.empty:
         st.info("Aucune donnée pour cet indicateur.")
@@ -1147,6 +1184,34 @@ with tab_about:
 Projet open source : pipeline Python → DuckDB → dbt → Streamlit. [Code sur GitHub]({REPO_URL}).
 """
         )
+
+    st.space("small")
+    st.subheader("Définitions des indicateurs")
+    st.caption("Définitions telles que publiées par la source (la World Bank ne les traduit pas toutes en "
+               "français). Année : dernière valeur publiée pour le Bénin. Abonnements et personnes ne se "
+               "comparent pas : 120 abonnements mobiles pour 100 habitants ne veulent pas dire que tout le "
+               "monde a un téléphone.")
+    benin_years = latest[latest.country_iso3 == FOCUS].set_index("indicator_code").latest_year
+    definitions = indicators.assign(
+        benin_year=indicators.indicator_code.map(benin_years),
+        source=[f"{n} ({o})" if pd.notna(o) else n for n, o in zip(indicators.source_name, indicators.source_organization)],
+    ).sort_values(["section", "theme", "label_fr"])
+    def_columns = ["label_fr", "unit_fr", "definition", "benin_year", "source", "source_published_on",
+                   "indicator_code", "source_url"]
+    st.dataframe(
+        definitions[def_columns],
+        column_config={
+            "label_fr": st.column_config.TextColumn("Indicateur", width="medium"),
+            "unit_fr": "Unité",
+            "definition": st.column_config.TextColumn("Définition de la source", width="large"),
+            "benin_year": st.column_config.NumberColumn("Année (Bénin)", format="%d"),
+            "source": "Source",
+            "source_published_on": st.column_config.DateColumn("Publié le", format="DD/MM/YYYY"),
+            "indicator_code": "Code",
+            "source_url": st.column_config.LinkColumn("Lien", display_text="ouvrir"),
+        },
+        hide_index=True, width="stretch", alt="Définitions, unités et sources de tous les indicateurs",
+    )
 
 st.divider()
 st.caption(
