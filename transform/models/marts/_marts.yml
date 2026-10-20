@@ -29,6 +29,13 @@ models:
   - name: fct_indicator_values
     description: Une ligne par indicateur × pays × année (valeurs renseignées uniquement).
     columns:
+      - name: collection_status
+        description: collectée (API de la source) ou démo (valeur synthétique de `make demo`).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [collectée, démo]
       - name: observation_id
         data_tests: [unique, not_null]
       - name: value
@@ -49,6 +56,12 @@ models:
   - name: mart_latest_values
     description: Dernière valeur par indicateur × pays et évolution sur `trend_years` ans.
     columns:
+      - name: collection_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [collectée, démo]
       - name: latest_id
         data_tests: [unique, not_null]
 
