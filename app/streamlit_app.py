@@ -1148,6 +1148,12 @@ with tab_catalog:
     c3.download_button("Catalogue complet (CSV)", to_csv(catalog[columns]), file_name="catalogue_benin_complet.csv",
                        mime="text/csv", icon=":material/download:", width="stretch",
                        help="Toutes les entrées du catalogue, sans filtre.")
+    st.markdown(
+        f":material/add_circle: Vous connaissez une source de données sur le Bénin qui manque ici ? "
+        f"[Proposer une source]({REPO_URL}/issues/new?template=proposer-une-source.yml) "
+        "(nom, URL, producteur, licence, format). Chaque proposition est auditée avant ajout."
+    )
+
     if not gbif.empty:
         st.space("small")
         st.subheader("Biodiversité : le Bénin sur GBIF")
