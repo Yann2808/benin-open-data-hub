@@ -226,6 +226,11 @@ source_health:
     official_api: true
     license: variable selon le jeu (CC0, CC BY, CC BY-NC)
     collection_policy: autorisée
+  - source: HDX — données humanitaires (API CKAN)
+    url: https://data.humdata.org/api/3/action/package_search?fq=groups:ben&rows=0
+    official_api: true
+    license: variable selon le jeu (CC BY majoritaire)
+    collection_policy: autorisée
   - source: data.gouv.bj
     url: https://data.gouv.bj/robots.txt
     official_api: false
@@ -242,3 +247,9 @@ gbif:
   # GBIF, API publique documentée (https://techdocs.gbif.org). Agrégats annuels seulement.
   api_base: https://api.gbif.org/v1
   country: BJ
+
+hdx:
+  # Humanitarian Data Exchange (OCHA), API CKAN documentée. Catalogue seulement (métadonnées).
+  site: https://data.humdata.org
+  group: ben
+  page_size: 500

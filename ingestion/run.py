@@ -18,7 +18,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import gbif, health, manual, nada, odfa, odin, worldbank
+from . import gbif, hdx, health, manual, nada, odfa, odin, worldbank
 from .common import ROOT, drop_demo_rows, ensure_raw_table, load_config, load_raw_table, upsert_raw_table, write_snapshot
 
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -27,7 +27,7 @@ DEMO_MARKERS = {
     "wb_observations": ("source_last_updated", "DEMO-SYNTHETIQUE"),
     "nada_studies": ("idno", "DEMO-"),
 }
-SOURCES = ("worldbank", "nada", "manual", "odfa", "odin", "gbif", "health")
+SOURCES = ("worldbank", "nada", "manual", "odfa", "odin", "gbif", "hdx", "health")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     ensure_raw_table("wb_indicator_meta", worldbank.META_COLUMNS)
     ensure_raw_table("odin_scores", odin.COLUMNS)
     ensure_raw_table("gbif_yearly", gbif.COLUMNS)
+    ensure_raw_table("hdx_datasets", hdx.COLUMNS)
 
     # Collecte réelle : on retire d'abord les restes d'un `make demo`, pour que
     # « dernière collecte conservée » ne mélange jamais démo et vraies données.
@@ -127,6 +128,13 @@ def main(argv: list[str] | None = None) -> int:
             log.info("raw.gbif_yearly : %s lignes", n)
         except Exception as err:  # noqa: BLE001
             log.warning("GBIF indisponible : %s — dernière collecte conservée", err)
+
+    if "hdx" in selected and not args.offline:
+        try:
+            n = load_raw_table("hdx_datasets", hdx.fetch_all(cfg["hdx"]), hdx.COLUMNS)
+            log.info("raw.hdx_datasets : %s lignes", n)
+        except Exception as err:  # noqa: BLE001
+            log.warning("HDX indisponible : %s — dernière collecte conservée", err)
 
     # Baromètre de l'accès aux données : jamais en démo (pas de réseau), jamais bloquant.
     if "health" in selected and not args.offline:
