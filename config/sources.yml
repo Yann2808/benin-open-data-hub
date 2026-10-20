@@ -77,6 +77,20 @@ worldbank:
       unit: "% de la population active"
       higher_is_better: false
 
+    # --- Socle numérique (vérifié le 2026-10-20, voir docs/audit_sources.md) -------------
+    # Non ajouté : dépenses de R&D (GB.XPD.RSDV.GD.ZS), aucune valeur publiée pour le Bénin.
+    - code: IT.NET.BBND.P2
+      # Abonnements (et non personnes) : à ne pas comparer avec « Personnes utilisant Internet »
+      label: Abonnements à l'Internet haut débit fixe
+      theme: Numérique
+      unit: abonnements pour 100 habitants
+      higher_is_better: true
+    - code: SE.TER.ENRR
+      label: Taux brut de scolarisation dans le supérieur
+      theme: Éducation
+      unit: "% brut"
+      higher_is_better: true
+
     # --- Investir au Bénin : marché, stabilité, climat des affaires --------------
     # Écartés faute de données récentes pour la plupart des 7 pays (vérifié le 2026-10-14) :
     # dette publique (GC.DOD.TOTL.GD.ZS), recettes fiscales (GC.TAX.TOTL.GD.ZS),
