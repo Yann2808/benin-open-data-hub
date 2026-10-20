@@ -293,6 +293,10 @@ try:
     odfa = odfa_catalog.enrich(query("select * from marts.mart_odfa_datasets"))
 except duckdb.Error:  # entrepôt antérieur à l'ajout d'ODFA
     odfa = pd.DataFrame()
+try:
+    availability = query("select * from marts.mart_source_availability order by source")
+except duckdb.Error:  # entrepôt ou exports antérieurs au baromètre
+    availability = pd.DataFrame()
 freshness = query(
     "select max(source_last_updated) as src, max(ingested_at) as ing from marts.fct_indicator_values"
 ).iloc[0]
@@ -349,13 +353,14 @@ if is_demo:
         icon=":material/warning:",
     )
 
-tab_score, tab_country, tab_invest, tab_compare, tab_odfa, tab_catalog, tab_about = st.tabs([
+tab_score, tab_country, tab_invest, tab_compare, tab_odfa, tab_catalog, tab_access, tab_about = st.tabs([
     ":material/dashboard: Tableau de bord",
     ":material/flag: Fiche pays",
     ":material/business_center: Investir au Bénin",
     ":material/compare_arrows: Comparer",
     ":material/folder_open: Open Data for Africa",
     ":material/menu_book: Catalogue",
+    ":material/network_check: Accès aux données",
     ":material/info: Méthode",
 ])
 
@@ -1039,6 +1044,72 @@ with tab_catalog:
     elif "enquête" not in set(catalog.kind.str.lower()):
         st.info("Le catalogue INStaD (NADA) est momentanément indisponible : les enquêtes "
                 "réapparaîtront dès que le site sera de nouveau en ligne.", icon=":material/info:")
+
+# --- Accès aux données -------------------------------------------------------
+with tab_access:
+    st.space("small")
+    st.markdown(
+        "Chaque collecte teste aussi l'accès à toutes les sources du hub, y compris celles qui ne sont "
+        "que cataloguées. **Une source inaccessible n'est pas une donnée absente** : quand un serveur ne "
+        "répond pas, la donnée existe peut-être, mais personne ne peut la consulter à ce moment-là."
+    )
+    if availability.empty:
+        st.info("Baromètre pas encore alimenté : lance `make run` (ou le workflow `refresh` sur GitHub).",
+                icon=":material/info:")
+    else:
+        n_ok = int((availability.badge == "joignable").sum())
+        n_down = int((availability.badge == "en panne").sum())
+        n_forbidden = int((availability.badge == "collecte interdite").sum())
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Sources testées", len(availability), border=True)
+        k2.metric("Joignables", n_ok, border=True)
+        k3.metric("En panne", n_down, border=True,
+                  help="Pas de réponse, erreur serveur, accès refusé ou page introuvable au dernier test.")
+        k4.metric("Collecte interdite", n_forbidden, border=True,
+                  help="Le site interdit la collecte automatisée (robots.txt) : seul /robots.txt est testé, "
+                       "les fichiers sont déposés à la main.")
+
+        badges = {"joignable": "🟢 joignable", "en panne": "🔴 en panne", "collecte interdite": "⛔ collecte interdite"}
+        table = availability.assign(
+            badge_txt=availability.badge.map(badges).fillna(availability.badge),
+            http_txt=availability.last_http_status.map(lambda c: "—" if pd.isna(c) else str(int(c))),
+            api_txt=availability.official_api.map({True: "oui", False: "non"}),
+            # Heure du test en UTC, sans fuseau : Streamlit l'affiche telle quelle
+            tested=pd.to_datetime(availability.last_tested_at, utc=True).dt.tz_localize(None),
+            success=pd.to_datetime(availability.last_success_at, utc=True).dt.tz_localize(None),
+        )
+        columns = ["source", "badge_txt", "http_txt", "last_response_time_ms", "availability_rate", "n_tests",
+                   "success", "tested", "api_txt", "license", "collection_policy", "last_error", "url_tested"]
+        st.dataframe(
+            table[columns],
+            column_config={
+                "source": st.column_config.TextColumn("Source", width="medium"),
+                "badge_txt": "Statut",
+                "http_txt": "Code HTTP",
+                "last_response_time_ms": st.column_config.NumberColumn("Temps de réponse", format="%d ms"),
+                "availability_rate": st.column_config.ProgressColumn(
+                    "Disponibilité", format="percent", min_value=0, max_value=1,
+                    help="Part des tests réussis sur tout l'historique du baromètre."),
+                "n_tests": st.column_config.NumberColumn("Tests", help="Nombre de tests depuis le début."),
+                "success": st.column_config.DatetimeColumn("Dernière réponse réussie (UTC)", format="DD/MM/YYYY HH:mm"),
+                "tested": st.column_config.DatetimeColumn("Dernier test (UTC)", format="DD/MM/YYYY HH:mm"),
+                "api_txt": "API officielle",
+                "license": "Licence",
+                "collection_policy": "Collecte",
+                "last_error": "Dernière erreur",
+                "url_tested": st.column_config.LinkColumn("Adresse testée"),
+            },
+            hide_index=True, width="stretch",
+            alt="Baromètre de l'accès aux sources de données : statut et disponibilité par source",
+        )
+        c1, c2 = st.columns([4, 1])
+        c1.caption(
+            "Un test = une requête unique, sans nouvel essai, à l'heure de la collecte. Joignable = réponse "
+            "HTTP 2xx ou 3xx. Un 403 signale souvent une protection anti-robots (Open Data for Africa) ; "
+            "le hub ne la contourne pas."
+        )
+        c2.download_button("Télécharger (CSV)", to_csv(availability), file_name="acces_sources_benin.csv",
+                           mime="text/csv", icon=":material/download:", width="stretch")
 
 # --- Méthode -----------------------------------------------------------------
 with tab_about:
