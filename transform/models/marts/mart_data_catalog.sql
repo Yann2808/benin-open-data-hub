@@ -60,3 +60,20 @@ select
 from {{ ref('stg_odfa_datasets') }} d
 left join {{ ref('stg_odfa_observations') }} o using (dataset_id)
 group by all
+
+union all
+
+-- Scores ODIN du Bénin (ouverture des statistiques officielles)
+select
+    'indicateur',
+    'ODIN — Open Data Watch',
+    'Score ODIN d''ouverture des statistiques officielles',
+    'Gouvernance des données',
+    min(edition_year),
+    max(edition_year),
+    'https://odin.opendatawatch.com/country-profiles/{{ var("focus_country") }}',
+    'CC BY 4.0',
+    false
+from {{ ref('stg_odin_scores') }}
+where country_iso3 = '{{ var("focus_country") }}'
+having count(*) > 0

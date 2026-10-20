@@ -24,3 +24,5 @@ sources:
         description: >
           Baromètre de l'accès aux données : un test HTTP par source et par exécution
           (code, temps de réponse, API officielle, licence, politique de collecte). Cumulé, jamais écrasé.
+      - name: odin_scores
+        description: Scores ODIN (Open Data Watch, CC BY 4.0) par pays et par édition (0 à 100).
