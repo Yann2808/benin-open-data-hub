@@ -1313,10 +1313,13 @@ with tab_about:
             """
 :material/database: **Sources**
 
-- *World Bank — World Development Indicators*, API publique v2 : indicateurs du tableau de bord et de l'onglet Investir.
+- *World Bank — World Development Indicators*, API publique v2 : indicateurs du tableau de bord et de l'onglet Investir, avec leur définition officielle.
 - *INStaD — catalogue de microdonnées (NADA)* : métadonnées des enquêtes uniquement.
 - *Open Data for Africa — Bénin* (BAD) : inventaire des jeux via l'API du portail (titre, producteur, mise à jour, licence).
+- *ODIN* (Open Data Watch, CC BY 4.0) : scores d'ouverture des statistiques officielles.
+- *GBIF* : agrégats annuels de biodiversité ; *HDX* (OCHA) : catalogue des jeux humanitaires.
 - *data.gouv.bj* : fichiers téléchargés à la main (le portail n'autorise pas la collecte automatisée), avec URL et date de téléchargement tracées.
+- Budget (DGB), ARCEP, IGN : seulement référencés au catalogue (licence absente ou restrictive, pas d'API).
 """
         )
     with m2.container(border=True, height="stretch"):
@@ -1338,6 +1341,20 @@ with tab_about:
 - Dernière collecte par le hub : {fmt_date(freshness.ing)}.
 
 Projet open source : pipeline Python → DuckDB → dbt → Streamlit. [Code sur GitHub]({REPO_URL}).
+"""
+        )
+
+    with st.container(border=True):
+        st.markdown(
+            """
+:material/network_check: **Inaccessible n'est pas absente**
+
+Une source **inaccessible** ne répond pas au moment du test (serveur en panne, maintenance, accès refusé,
+nom de domaine introuvable) : la donnée existe peut-être, mais personne ne peut la consulter. Une donnée
+**absente** n'est pas publiée par une source qui, elle, répond (ex. aucune valeur de dépenses de R&D pour
+le Bénin à la World Bank). Le hub teste chaque source à chaque collecte (onglet *Accès aux données*) et
+n'invente jamais de valeur : une case vide reste vide. Chaque valeur porte un statut de collecte
+(*collectée* ou *démo*) et la date de publication de sa source.
 """
         )
 
