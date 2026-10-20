@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     ensure_raw_table("odfa_datasets", odfa.DATASET_COLUMNS)
     ensure_raw_table("odfa_fetch_log", odfa.LOG_COLUMNS)
     ensure_raw_table("source_health", health.COLUMNS)
+    ensure_raw_table("wb_indicator_meta", worldbank.META_COLUMNS)
 
     # Collecte réelle : on retire d'abord les restes d'un `make demo`, pour que
     # « dernière collecte conservée » ne mélange jamais démo et vraies données.
@@ -74,6 +75,15 @@ def main(argv: list[str] | None = None) -> int:
             log.error("World Bank en échec : %s — dernière collecte conservée", err)
             ensure_raw_table("wb_observations", worldbank.COLUMNS)
             failures.append("worldbank")
+
+    # Définitions officielles des indicateurs : jamais en démo (on n'invente pas de
+    # définition), et un échec garde les précédentes sans bloquer la collecte.
+    if "worldbank" in selected and not args.offline:
+        try:
+            n = load_raw_table("wb_indicator_meta", worldbank.fetch_metadata(cfg["worldbank"]), worldbank.META_COLUMNS)
+            log.info("raw.wb_indicator_meta : %s lignes", n)
+        except Exception as err:  # noqa: BLE001
+            log.warning("Définitions World Bank indisponibles : %s — précédentes conservées", err)
 
     if "nada" in selected:
         try:

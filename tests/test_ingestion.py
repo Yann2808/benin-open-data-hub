@@ -188,3 +188,20 @@ def test_manual_rejects_unsafe_input(tmp_warehouse, tmp_path, table, file):
     (tmp_path / "manual").mkdir(exist_ok=True)
     with pytest.raises(ValueError):
         manual.load_all({"folder": "manual", "datasets": [{"file": file, "table": table}]})
+
+
+def test_worldbank_metadata_keeps_official_definition():
+    client = FakeClient(fixture("wb_indicator_meta.json"))
+    cfg = {**WB_CFG, "indicators": [{"code": "IT.NET.USER.ZS"}]}
+    rows = worldbank.fetch_metadata(cfg, client)
+
+    assert client.calls[0][0].endswith("/fr/indicator/IT.NET.USER.ZS")
+    assert len(rows) == 1 and set(rows[0]) == set(worldbank.META_COLUMNS)
+    assert rows[0]["indicator_code"] == "IT.NET.USER.ZS"
+    assert rows[0]["definition"]  # définition publiée par la source, non vide
+    assert rows[0]["source_organization"]
+
+
+def test_worldbank_metadata_empty_fields_become_null():
+    row = worldbank.normalize_meta({"id": "X", "name": "Nom", "sourceNote": "  ", "sourceOrganization": ""}, "t")
+    assert row["definition"] is None and row["source_organization"] is None
