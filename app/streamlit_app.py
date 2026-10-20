@@ -952,6 +952,48 @@ with tab_odfa:
                   delta=f"{share(licensed, len(odfa))} du total", delta_color="off", delta_arrow="off",
                   help="Sans licence déclarée, vérifier les conditions d'utilisation sur le portail.")
 
+        # Âge des jeux : année de la dernière mise à jour déclarée par le portail
+        st.space("small")
+        st.subheader("Âge des jeux de données")
+        periods = odfa.update_period.value_counts()
+        a1, a2, a3 = st.columns(3)
+        for col, period in zip((a1, a2, a3), odfa_catalog.UPDATE_PERIODS):
+            n = int(periods.get(period, 0))
+            label = {"depuis 2024": "Mis à jour depuis 2024", "2020 à 2023": "Dernière mise à jour entre 2020 et 2023",
+                     "avant 2020": "Dernière mise à jour avant 2020"}[period]
+            col.metric(label, n, border=True, delta=f"{share(n, len(odfa))} du total", delta_color="off", delta_arrow="off")
+        if periods.get("date inconnue", 0):
+            st.caption(f"{int(periods['date inconnue'])} jeu(x) sans date de mise à jour.")
+        ages = odfa_catalog.age_table(odfa, "producer")
+        age_colors = {"depuis 2024": FOCUS_COLOR, "2020 à 2023": "#E8B200", "avant 2020": NEUTRAL,
+                      "date inconnue": "#E3E5DF"}
+        with st.container(border=True):
+            st.markdown("**Par producteur** · nombre de jeux selon l'année de dernière mise à jour")
+            fig = go.Figure()
+            for period in [c for c in ages.columns if c != "total"]:
+                fig.add_trace(go.Bar(
+                    y=ages.index, x=ages[period], name=period, orientation="h",
+                    marker=dict(color=age_colors[period], line=dict(width=1, color="white")),
+                    text=[str(v) if v else "" for v in ages[period]], textposition="inside",
+                    insidetextanchor="middle", hovertemplate=f"%{{y}} · {period} : %{{x}} jeux<extra></extra>",
+                ))
+            style_fig(fig, height=80 + 45 * len(ages))
+            fig.update_layout(barmode="stack", bargap=0.3, legend=dict(orientation="h", y=1.1, x=0, traceorder="normal"),
+                              margin=dict(l=10, r=10, t=40, b=10))
+            fig.update_xaxes(showticklabels=False, showgrid=False)
+            fig.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig, width="stretch")
+            st.caption("Producteurs regroupés en familles (INStaD et ex-INSAE, ministères, agences publiques, "
+                       "organismes internationaux). Date de mise à jour déclarée par le portail : elle peut être "
+                       "postérieure à la période couverte par les données.")
+            with st.expander("Détail par producteur, tel que saisi sur le portail"):
+                detail = odfa_catalog.age_table(odfa, "source_name")
+                st.dataframe(detail, width="stretch",
+                             alt="Nombre de jeux Open Data for Africa par producteur et période de mise à jour")
+                st.download_button("Télécharger (CSV)", to_csv(detail.reset_index()),
+                                   file_name="odfa_age_par_producteur.csv", mime="text/csv",
+                                   icon=":material/download:")
+
         g1, g2 = st.columns([3, 2])
         with g1.container(border=True):
             st.markdown("**Jeux par thème** · estimé d'après le titre et le producteur")

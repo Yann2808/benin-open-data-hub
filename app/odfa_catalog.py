@@ -145,6 +145,7 @@ def age_table(datasets: pd.DataFrame, by: str) -> pd.DataFrame:
     table = pd.crosstab(datasets[by], periods).reindex(columns=list(UPDATE_PERIODS), fill_value=0)
     table = table.loc[:, (table.sum() > 0) | (table.columns != "date inconnue")]
     table["total"] = table.sum(axis=1)
+    table.columns.name = None
     return table.sort_values("total", ascending=False)
 
 
