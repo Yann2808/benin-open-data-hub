@@ -6,6 +6,9 @@ select
     o.year,
     o.value,
     o.is_demo,
+    -- Statut de collecte : valeur collectée sur l'API, ou synthétique (make demo)
+    case when o.is_demo then 'démo' else 'collectée' end as collection_status,
+    o.obs_status,
     o.source_last_updated,
     o.ingested_at
 from {{ ref('stg_wb_observations') }} o

@@ -11,7 +11,9 @@ with ranked as (
 ),
 
 latest as (
-    select indicator_code, country_iso3, year as latest_year, value as latest_value, is_demo
+    select
+        indicator_code, country_iso3, year as latest_year, value as latest_value, is_demo,
+        collection_status, obs_status, source_last_updated
     from ranked
     where rn = 1
 ),
@@ -43,7 +45,10 @@ select
         when b.baseline_value is null or b.baseline_value = 0 then null
         else (l.latest_value - b.baseline_value) / abs(b.baseline_value)
     end as change_pct,
-    l.is_demo
+    l.is_demo,
+    l.collection_status,
+    l.obs_status,
+    l.source_last_updated
 from latest l
 left join baseline b
     on b.indicator_code = l.indicator_code

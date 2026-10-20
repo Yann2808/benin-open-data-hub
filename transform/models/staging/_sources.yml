@@ -8,6 +8,8 @@ sources:
         description: Observations World Bank (API v2), une ligne par indicateur × pays × année.
       - name: wb_indicator_catalog
         description: Métadonnées métier des indicateurs, issues de config/sources.yml.
+      - name: wb_indicator_meta
+        description: Nom, définition officielle (sourceNote) et organisme producteur de chaque indicateur (API /v2/fr/indicator).
       - name: nada_studies
         description: Catalogue des enquêtes de l'INStaD (plateforme NADA), métadonnées seulement.
       - name: manual_registry
