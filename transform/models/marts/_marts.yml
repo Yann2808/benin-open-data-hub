@@ -135,3 +135,20 @@ models:
                 values: [autorisée, catalogue seulement, interdite]
       - name: n_tests
         data_tests: [not_null]
+
+  - name: mart_odin_scores
+    description: >
+      Scores ODIN (Open Data Watch, CC BY 4.0) : ouverture et couverture des statistiques officielles,
+      de 0 à 100, pour le Bénin et ses pays de comparaison, à chaque édition. Méthodologie revue entre
+      éditions : les évolutions dans le temps sont indicatives.
+    columns:
+      - name: odin_id
+        data_tests: [unique, not_null]
+      - name: overall_score
+        data_tests: [not_null]
+      - name: country_iso3
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: country_iso3
