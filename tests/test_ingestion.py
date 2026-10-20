@@ -254,7 +254,7 @@ def test_http_client_post_json_retries_on_server_errors():
     assert client.session.calls == [("POST", "https://api.example/x", {"a": 1})] * 2
 
 
-def test_http_client_does_not_retry_client_errors():
+def test_http_client_fake_session_stops_on_client_error():
     client = common.HttpClient(retries=3, backoff=0)
     client.session = FakeSession(404)
     with pytest.raises(RuntimeError):
