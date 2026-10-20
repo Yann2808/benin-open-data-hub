@@ -177,3 +177,30 @@ odfa:
   exclude: []             # ids à ignorer (ex. jeux trop lourds)
   # Facultatif, pour relever les quotas d'appels : variables d'environnement
   # ODFA_APP_ID et ODFA_APP_SECRET (créées sur https://benin.opendataforafrica.org/user/apps).
+
+source_health:
+  # Baromètre de l'accès aux données (ingestion/health.py) : une requête GET légère
+  # par source à chaque `make run`, sans retry. Chaque source du projet y figure,
+  # y compris celles qui sont seulement cataloguées.
+  # collection_policy : autorisée | catalogue seulement | interdite.
+  # Collecte interdite (robots.txt) : on ne teste que /robots.txt, toujours autorisé.
+  - source: World Bank (API WDI)
+    url: https://api.worldbank.org/v2/country/BEN/indicator/SP.POP.TOTL?format=json&per_page=1
+    official_api: true
+    license: CC BY 4.0
+    collection_policy: autorisée
+  - source: INStaD (catalogue NADA)
+    url: https://nada.instad.bj/index.php/api/catalog/search?ps=1
+    official_api: true
+    license: non précisée
+    collection_policy: autorisée
+  - source: Open Data for Africa — Bénin (API Knoema)
+    url: https://benin.opendataforafrica.org/api/1.0/meta/dataset
+    official_api: true
+    license: variable selon le jeu
+    collection_policy: autorisée
+  - source: data.gouv.bj
+    url: https://data.gouv.bj/robots.txt
+    official_api: false
+    license: variable selon le jeu
+    collection_policy: interdite

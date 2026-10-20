@@ -3,6 +3,7 @@
     python -m ingestion.run              # collecte réelle (World Bank + INStaD + fichiers manuels)
     python -m ingestion.run --offline    # charge les jeux de test (démo sans réseau)
     python -m ingestion.run --only worldbank
+    python -m ingestion.run --only health   # baromètre de l'accès aux sources seulement
     python -m ingestion.run --only odfa  # collecte complète d'Open Data for Africa (longue, reprend où elle s'est arrêtée)
     python -m ingestion.run --only odfa --refresh   # recollecte aussi les jeux déjà présents
 
@@ -17,7 +18,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import manual, nada, odfa, worldbank
+from . import health, manual, nada, odfa, worldbank
 from .common import ROOT, drop_demo_rows, ensure_raw_table, load_config, load_raw_table, upsert_raw_table, write_snapshot
 
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -26,7 +27,7 @@ DEMO_MARKERS = {
     "wb_observations": ("source_last_updated", "DEMO-SYNTHETIQUE"),
     "nada_studies": ("idno", "DEMO-"),
 }
-SOURCES = ("worldbank", "nada", "manual", "odfa")
+SOURCES = ("worldbank", "nada", "manual", "odfa", "health")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -49,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     ensure_raw_table("manual_registry", manual.REGISTRY_COLUMNS)
     ensure_raw_table("odfa_datasets", odfa.DATASET_COLUMNS)
     ensure_raw_table("odfa_fetch_log", odfa.LOG_COLUMNS)
+    ensure_raw_table("source_health", health.COLUMNS)
 
     # Collecte réelle : on retire d'abord les restes d'un `make demo`, pour que
     # « dernière collecte conservée » ne mélange jamais démo et vraies données.
@@ -96,6 +98,14 @@ def main(argv: list[str] | None = None) -> int:
         log.info("raw.odfa_observations : %s lignes", odfa.load_observations())
     else:
         odfa.load_observations(FIXTURES / "odfa_empty")  # table vide en démo
+
+    # Baromètre de l'accès aux données : jamais en démo (pas de réseau), jamais bloquant.
+    if "health" in selected and not args.offline:
+        try:
+            n = health.append_history(health.check_all(cfg.get("source_health") or []))
+            log.info("raw.source_health : %s tests au total", n)
+        except Exception as err:  # noqa: BLE001
+            log.warning("Baromètre de l'accès aux données en échec : %s", err)
 
     # Seule la World Bank est indispensable : sans elle, le dashboard serait vide.
     if failures:
