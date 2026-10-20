@@ -205,3 +205,16 @@ def test_worldbank_metadata_keeps_official_definition():
 def test_worldbank_metadata_empty_fields_become_null():
     row = worldbank.normalize_meta({"id": "X", "name": "Nom", "sourceNote": "  ", "sourceOrganization": ""}, "t")
     assert row["definition"] is None and row["source_organization"] is None
+
+
+def test_worldbank_metadata_falls_back_to_english_when_translation_is_empty():
+    fr = [{"page": 1, "pages": 1}, [{"id": "NV.SRV.TOTL.ZS", "name": "", "sourceNote": "", "sourceOrganization": ""}]]
+    en = [{"page": 1, "pages": 1}, [{"id": "NV.SRV.TOTL.ZS", "name": "Services, value added (% of GDP)",
+                                     "sourceNote": "Services industries correspond to ISIC divisions 45-99.",
+                                     "sourceOrganization": "World Bank national accounts data"}]]
+    client = FakeClient(fr, en)
+    rows = worldbank.fetch_metadata({**WB_CFG, "indicators": [{"code": "NV.SRV.TOTL.ZS"}]}, client)
+
+    assert client.calls[1][0].endswith("/v2/indicator/NV.SRV.TOTL.ZS")
+    assert rows[0]["name_source"] == "Services, value added (% of GDP)"
+    assert rows[0]["definition"].startswith("Services industries")
