@@ -248,6 +248,27 @@ def definition_md(code: str) -> str:
             f"[{source_line(code)}]({m.source_url})")
 
 
+def indicator_export(code: str) -> pd.DataFrame:
+    """Série complète d'un indicateur (7 pays, toutes années) prête à télécharger :
+    chaque valeur avec son unité, son statut de collecte et sa source."""
+    m = INDICATOR_META.loc[code]
+    data = query(
+        """
+        select f.*, c.country_name_fr
+        from marts.fct_indicator_values f
+        join marts.dim_country c using (country_iso3)
+        where f.indicator_code = ?
+        order by c.country_name_fr, f.year
+        """,
+        (code,),
+    )
+    # Exports antérieurs : statuts absents, colonnes gardées seulement si présentes
+    keep = [c for c in ("country_iso3", "country_name_fr", "year", "value", "collection_status", "obs_status",
+                        "source_last_updated") if c in data.columns]
+    return data[keep].assign(indicator_code=code, indicator_label=m.label_fr, unit=m.unit_fr,
+                             source=m.source_name, source_url=m.source_url)
+
+
 def country_profile(iso: str) -> pd.DataFrame:
     """Même calcul que mart_benin_scorecard, pour n'importe lequel des 7 pays : dernière
     valeur, évolution, rang parmi les pays à donnée récente et médiane des autres pays."""
@@ -925,10 +946,9 @@ with tab_compare:
         n1, n2 = st.columns([4, 1])
         n1.caption(" ".join(notes))
         n2.download_button(
-            "Télécharger (CSV)",
-            to_csv(series[["country_iso3", "country_name_fr", "year", "value"]]
-                   .assign(indicator_code=code, unit=unit)),
-            file_name=f"{code}.csv", mime="text/csv", icon=":material/download:", width="stretch",
+            "Télécharger l'indicateur (CSV)", to_csv(indicator_export(code)),
+            file_name=f"benin_open_data_hub_{code}.csv", mime="text/csv", icon=":material/download:",
+            width="stretch", help="Toutes les années et les 7 pays, avec unité, statut de collecte et source.",
         )
 
 # --- Open Data for Africa ----------------------------------------------------
@@ -1120,10 +1140,14 @@ with tab_catalog:
         },
         hide_index=True, width="stretch",
     )
-    c1, c2 = st.columns([4, 1])
-    c1.caption(f"{len(view)} entrée(s).")
-    c2.download_button("Télécharger (CSV)", to_csv(view[columns]), file_name="catalogue_benin.csv",
-                       mime="text/csv", icon=":material/download:", width="stretch")
+    c1, c2, c3 = st.columns([3, 1, 1])
+    c1.caption(f"{len(view)} entrée(s) sur {len(catalog)}.")
+    c2.download_button("Sélection (CSV)", to_csv(view[columns]), file_name="catalogue_benin_selection.csv",
+                       mime="text/csv", icon=":material/download:", width="stretch",
+                       help="Les entrées affichées, avec les filtres en cours.")
+    c3.download_button("Catalogue complet (CSV)", to_csv(catalog[columns]), file_name="catalogue_benin_complet.csv",
+                       mime="text/csv", icon=":material/download:", width="stretch",
+                       help="Toutes les entrées du catalogue, sans filtre.")
     if not gbif.empty:
         st.space("small")
         st.subheader("Biodiversité : le Bénin sur GBIF")
