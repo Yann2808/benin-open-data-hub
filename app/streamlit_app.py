@@ -142,7 +142,10 @@ def fmt_change(row: pd.Series) -> str | None:
 def fmt_date(value) -> str:
     if value is None or pd.isna(value):
         return "inconnue"
-    return pd.Timestamp(value).strftime("%d/%m/%Y")
+    try:
+        return pd.Timestamp(value).strftime("%d/%m/%Y")
+    except (ValueError, TypeError):  # ex. marqueur « DEMO-SYNTHETIQUE » de make demo : affiché tel quel
+        return str(value)
 
 
 def ordinal(rank: int) -> str:
