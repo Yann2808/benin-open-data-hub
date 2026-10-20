@@ -218,3 +218,45 @@ def test_worldbank_metadata_falls_back_to_english_when_translation_is_empty():
     assert client.calls[1][0].endswith("/v2/indicator/NV.SRV.TOTL.ZS")
     assert rows[0]["name_source"] == "Services, value added (% of GDP)"
     assert rows[0]["definition"].startswith("Services industries")
+
+
+class FakeSession:
+    """Session requests minimale : renvoie les codes prévus, dans l'ordre."""
+
+    def __init__(self, *statuses):
+        self.statuses = list(statuses)
+        self.calls = []
+        self.headers = {}
+
+    def get(self, url, params=None, timeout=None):
+        return self._respond("GET", url, None)
+
+    def post(self, url, json=None, timeout=None):
+        return self._respond("POST", url, json)
+
+    def _respond(self, method, url, json):
+        self.calls.append((method, url, json))
+        status = self.statuses.pop(0)
+
+        class Resp:
+            status_code = status
+
+            def json(self):
+                return {"ok": True}
+        Resp.url = url
+        return Resp()
+
+
+def test_http_client_post_json_retries_on_server_errors():
+    client = common.HttpClient(retries=3, backoff=0)
+    client.session = FakeSession(503, 200)
+    assert client.post_json("https://api.example/x", {"a": 1}) == {"ok": True}
+    assert client.session.calls == [("POST", "https://api.example/x", {"a": 1})] * 2
+
+
+def test_http_client_does_not_retry_client_errors():
+    client = common.HttpClient(retries=3, backoff=0)
+    client.session = FakeSession(404)
+    with pytest.raises(RuntimeError):
+        client.get_json("https://api.example/missing")
+    assert len(client.session.calls) == 1
