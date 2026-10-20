@@ -328,6 +328,10 @@ try:
     availability = query("select * from marts.mart_source_availability order by source")
 except duckdb.Error:  # entrepôt ou exports antérieurs au baromètre
     availability = pd.DataFrame()
+try:
+    odin_scores = query("select * from marts.mart_odin_scores order by edition_year, country_iso3")
+except duckdb.Error:  # entrepôt ou exports antérieurs à ODIN
+    odin_scores = pd.DataFrame()
 freshness = query(
     "select max(source_last_updated) as src, max(ingested_at) as ing from marts.fct_indicator_values"
 ).iloc[0]
@@ -1189,6 +1193,60 @@ with tab_access:
         )
         c2.download_button("Télécharger (CSV)", to_csv(availability), file_name="acces_sources_benin.csv",
                            mime="text/csv", icon=":material/download:", width="stretch")
+
+    # Ouverture des statistiques officielles : scores ODIN (Open Data Watch)
+    st.space("small")
+    st.subheader("Ouverture des statistiques officielles (ODIN)")
+    st.caption("L'Open Data Inventory d'Open Data Watch note de 0 à 100 la couverture (quelles statistiques "
+               "sont publiées) et l'ouverture (formats, licences, téléchargement) des statistiques officielles "
+               "de chaque pays.")
+    if odin_scores.empty:
+        st.info("Scores ODIN pas encore collectés : lance `make run`.", icon=":material/info:")
+    else:
+        last_edition = int(odin_scores.edition_year.max())
+        current = odin_scores[odin_scores.edition_year == last_edition].sort_values("overall_score")
+        focus_row = current[current.country_iso3 == FOCUS]
+        if len(focus_row):
+            f = focus_row.iloc[0]
+            o1, o2, o3, o4 = st.columns(4)
+            o1.metric(f"Score ODIN {last_edition}", f"{f.overall_score:.1f}".replace(".", ","), border=True)
+            o2.metric("Couverture", f"{f.coverage_score:.1f}".replace(".", ","), border=True)
+            o3.metric("Ouverture", f"{f.openness_score:.1f}".replace(".", ","), border=True)
+            o4.metric(f"Rang parmi les {int(f.n_hub_countries)} pays du hub", ordinal(int(f.rank_among_hub)),
+                      border=True,
+                      help=None if pd.isna(f.rank_world) else
+                      f"{ordinal(int(f.rank_world))} sur {int(f.n_countries_ranked)} pays dans le monde.")
+        d1, d2 = st.columns([2, 3])
+        with d1.container(border=True):
+            st.markdown(f"**Score global {last_edition}** · sur 100")
+            fig = go.Figure(go.Bar(
+                x=current.overall_score, y=current.country_name_fr, orientation="h",
+                marker=dict(color=[COLORS[i] for i in current.country_iso3], cornerradius=4),
+                text=[f"{v:.1f}" for v in current.overall_score], textposition="outside", cliponaxis=False,
+                hovertemplate="%{y} : %{x:.1f} / 100<extra></extra>",
+            ))
+            style_fig(fig, height=320)
+            fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=50, t=10, b=10))
+            fig.update_xaxes(showticklabels=False, showgrid=False, range=[0, 100])
+            st.plotly_chart(fig, width="stretch")
+        with d2.container(border=True):
+            st.markdown("**Évolution du score global** · éditions ODIN")
+            fig = go.Figure()
+            for (iso, name), g in odin_scores.groupby(["country_iso3", "country_name_fr"]):
+                focus = iso == FOCUS
+                fig.add_trace(go.Scatter(
+                    x=g.edition_year, y=g.overall_score, name=name, mode="lines+markers",
+                    line=dict(color=COLORS[iso], width=4 if focus else 2), legendrank=1 if focus else 10,
+                    hovertemplate=f"{name} · %{{x}} : %{{y:.1f}}<extra></extra>",
+                ))
+            fig.data = tuple(sorted(fig.data, key=lambda t: t.line.width))
+            style_fig(fig, height=320)
+            fig.update_layout(legend=dict(orientation="h", y=-0.2, x=0), hovermode="x unified")
+            fig.update_xaxes(tickvals=sorted(odin_scores.edition_year.unique()))
+            fig.update_yaxes(range=[0, 100])
+            st.plotly_chart(fig, width="stretch")
+        st.caption("Source : [Open Data Watch, Open Data Inventory](https://odin.opendatawatch.com/), licence "
+                   "CC BY 4.0. La méthodologie a changé entre éditions : les évolutions sont indicatives.")
 
 # --- Méthode -----------------------------------------------------------------
 with tab_about:
