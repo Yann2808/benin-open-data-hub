@@ -49,10 +49,20 @@ class HttpClient:
         self.session.headers["Accept"] = "application/json"
 
     def get_json(self, url: str, params: dict[str, Any] | None = None) -> Any:
+        return self._send("GET", url, params=params)
+
+    def post_json(self, url: str, body: Any = None) -> Any:
+        """POST d'un corps JSON (certaines API de lecture, comme ODIN, passent par POST)."""
+        return self._send("POST", url, json=body)
+
+    def _send(self, method: str, url: str, params: dict[str, Any] | None = None, json: Any = None) -> Any:
         last_err: Exception | None = None
         for attempt in range(1, self.retries + 1):
             try:
-                resp = self.session.get(url, params=params, timeout=self.timeout)
+                if method == "GET":
+                    resp = self.session.get(url, params=params, timeout=self.timeout)
+                else:
+                    resp = self.session.post(url, json=json, timeout=self.timeout)
                 if 400 <= resp.status_code < 500 and resp.status_code != 429:
                     raise ClientError(resp.status_code, resp.url)
                 if resp.status_code >= 500 or resp.status_code == 429:

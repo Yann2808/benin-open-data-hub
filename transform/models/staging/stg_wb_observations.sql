@@ -8,6 +8,7 @@ with typed as (
         country_name                            as country_name_en,
         try_cast(year as integer)               as year,
         try_cast(value as double)               as value,
+        obs_status,
         source_last_updated,
         source_last_updated = 'DEMO-SYNTHETIQUE' as is_demo,
         try_cast(ingested_at as timestamptz)    as ingested_at

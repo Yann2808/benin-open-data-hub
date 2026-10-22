@@ -123,6 +123,32 @@ def freshness_bucket(days: float | None) -> str:
     return "plus de 3 ans"
 
 
+# Âge des jeux : année de la dernière mise à jour déclarée par le portail
+UPDATE_PERIODS = ("depuis 2024", "2020 à 2023", "avant 2020", "date inconnue")
+
+
+def update_period(last_updated) -> str:
+    if last_updated is None or pd.isna(last_updated):
+        return "date inconnue"
+    year = pd.Timestamp(last_updated).year
+    if year >= 2024:
+        return "depuis 2024"
+    if year >= 2020:
+        return "2020 à 2023"
+    return "avant 2020"
+
+
+def age_table(datasets: pd.DataFrame, by: str) -> pd.DataFrame:
+    """Nombre de jeux par période de dernière mise à jour, ventilé selon `by`
+    (ex. producer), avec une colonne total ; colonnes dans l'ordre des périodes."""
+    periods = datasets["last_updated_on"].map(update_period)
+    table = pd.crosstab(datasets[by], periods).reindex(columns=list(UPDATE_PERIODS), fill_value=0)
+    table = table.loc[:, (table.sum() > 0) | (table.columns != "date inconnue")]
+    table["total"] = table.sum(axis=1)
+    table.columns.name = None
+    return table.sort_values("total", ascending=False)
+
+
 def enrich(datasets: pd.DataFrame) -> pd.DataFrame:
     """Ajoute titre lisible, sigle, thème estimé, famille de producteur et fraîcheur."""
     df = datasets.copy()
@@ -131,4 +157,5 @@ def enrich(datasets: pd.DataFrame) -> pd.DataFrame:
     df["theme"] = [estimate_theme(t, s) for t, s in zip(df["title"], df["source_name"])]
     df["producer"] = df["source_name"].map(producer_family)
     df["freshness"] = df["days_since_update"].map(freshness_bucket)
+    df["update_period"] = df.get("last_updated_on", pd.Series(None, index=df.index)).map(update_period)
     return df

@@ -35,6 +35,8 @@ SHAPES = {
     "EG.ELC.ACCS.ZS": (22, 0.03, 0.02),
     "SE.PRM.ENRR": (85, 0.012, 0.02),
     "SL.UEM.TOTL.ZS": (2.5, 0.0, 0.08),
+    "IT.NET.BBND.P2": (0.05, 0.12, 0.08),
+    "SE.TER.ENRR": (4.0, 0.04, 0.03),
     "SP.POP.1564.TO.ZS": (50, 0.004, 0.003),
     "SL.TLF.TOTL.IN": (2.8e6, 0.03, 0.005),
     "NY.GDP.PCAP.PP.CD": (1500, 0.04, 0.03),

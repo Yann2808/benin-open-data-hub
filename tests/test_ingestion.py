@@ -188,3 +188,88 @@ def test_manual_rejects_unsafe_input(tmp_warehouse, tmp_path, table, file):
     (tmp_path / "manual").mkdir(exist_ok=True)
     with pytest.raises(ValueError):
         manual.load_all({"folder": "manual", "datasets": [{"file": file, "table": table}]})
+
+
+def test_worldbank_metadata_keeps_official_definition():
+    client = FakeClient(fixture("wb_indicator_meta.json"))
+    cfg = {**WB_CFG, "indicators": [{"code": "IT.NET.USER.ZS"}]}
+    rows = worldbank.fetch_metadata(cfg, client)
+
+    assert client.calls[0][0].endswith("/fr/indicator/IT.NET.USER.ZS")
+    assert len(rows) == 1 and set(rows[0]) == set(worldbank.META_COLUMNS)
+    assert rows[0]["indicator_code"] == "IT.NET.USER.ZS"
+    assert rows[0]["definition"]  # définition publiée par la source, non vide
+    assert rows[0]["source_organization"]
+
+
+def test_worldbank_metadata_empty_fields_become_null():
+    row = worldbank.normalize_meta({"id": "X", "name": "Nom", "sourceNote": "  ", "sourceOrganization": ""}, "t")
+    assert row["definition"] is None and row["source_organization"] is None
+
+
+def test_worldbank_metadata_falls_back_to_english_when_translation_is_empty():
+    fr = [{"page": 1, "pages": 1}, [{"id": "NV.SRV.TOTL.ZS", "name": "", "sourceNote": "", "sourceOrganization": ""}]]
+    en = [{"page": 1, "pages": 1}, [{"id": "NV.SRV.TOTL.ZS", "name": "Services, value added (% of GDP)",
+                                     "sourceNote": "Services industries correspond to ISIC divisions 45-99.",
+                                     "sourceOrganization": "World Bank national accounts data"}]]
+    client = FakeClient(fr, en)
+    rows = worldbank.fetch_metadata({**WB_CFG, "indicators": [{"code": "NV.SRV.TOTL.ZS"}]}, client)
+
+    assert client.calls[1][0].endswith("/v2/indicator/NV.SRV.TOTL.ZS")
+    assert rows[0]["name_source"] == "Services, value added (% of GDP)"
+    assert rows[0]["definition"].startswith("Services industries")
+
+
+class FakeSession:
+    """Session requests minimale : renvoie les codes prévus, dans l'ordre."""
+
+    def __init__(self, *statuses):
+        self.statuses = list(statuses)
+        self.calls = []
+        self.headers = {}
+
+    def get(self, url, params=None, timeout=None):
+        return self._respond("GET", url, None)
+
+    def post(self, url, json=None, timeout=None):
+        return self._respond("POST", url, json)
+
+    def _respond(self, method, url, json):
+        self.calls.append((method, url, json))
+        status = self.statuses.pop(0)
+
+        class Resp:
+            status_code = status
+
+            def json(self):
+                return {"ok": True}
+        Resp.url = url
+        return Resp()
+
+
+def test_http_client_post_json_retries_on_server_errors():
+    client = common.HttpClient(retries=3, backoff=0)
+    client.session = FakeSession(503, 200)
+    assert client.post_json("https://api.example/x", {"a": 1}) == {"ok": True}
+    assert client.session.calls == [("POST", "https://api.example/x", {"a": 1})] * 2
+
+
+def test_http_client_fake_session_stops_on_client_error():
+    client = common.HttpClient(retries=3, backoff=0)
+    client.session = FakeSession(404)
+    with pytest.raises(RuntimeError):
+        client.get_json("https://api.example/missing")
+    assert len(client.session.calls) == 1
+
+
+def test_catalog_sources_default_status_and_columns():
+    rows = manual.catalog_sources([{"title": "T", "url": "https://x", "producer": "P"},
+                                   {"title": "U", "status": "expérimental"}])
+    assert rows[0]["status"] == "référencée" and rows[1]["status"] == "expérimental"
+    assert all(set(r) == set(manual.CATALOG_COLUMNS) for r in rows)
+    assert manual.catalog_sources(None) == []
+
+
+def test_config_catalog_sources_have_title_and_url():
+    for s in common.load_config()["catalog_sources"]:
+        assert s["title"] and s["url"].startswith("http")

@@ -8,6 +8,8 @@ sources:
         description: Observations World Bank (API v2), une ligne par indicateur × pays × année.
       - name: wb_indicator_catalog
         description: Métadonnées métier des indicateurs, issues de config/sources.yml.
+      - name: wb_indicator_meta
+        description: Nom, définition officielle (sourceNote) et organisme producteur de chaque indicateur (API /v2/fr/indicator).
       - name: nada_studies
         description: Catalogue des enquêtes de l'INStaD (plateforme NADA), métadonnées seulement.
       - name: manual_registry
@@ -18,3 +20,15 @@ sources:
         description: Journal de collecte par jeu de données (statut, lignes, erreur), cumulé entre exécutions.
       - name: odfa_observations
         description: Valeurs collectées sur Open Data for Africa, une ligne par série × date.
+      - name: source_health
+        description: >
+          Baromètre de l'accès aux données : un test HTTP par source et par exécution
+          (code, temps de réponse, API officielle, licence, politique de collecte). Cumulé, jamais écrasé.
+      - name: odin_scores
+        description: Scores ODIN (Open Data Watch, CC BY 4.0) par pays et par édition (0 à 100).
+      - name: gbif_yearly
+        description: GBIF, Bénin — occurrences par année d'observation et jeux publiés par année d'enregistrement.
+      - name: hdx_datasets
+        description: Catalogue HDX (OCHA) des jeux concernant le Bénin (groupe ben), métadonnées seulement.
+      - name: catalog_sources
+        description: Sources auditées mais seulement cataloguées (config `catalog_sources`), sans collecte.

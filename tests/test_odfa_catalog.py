@@ -49,3 +49,24 @@ def test_enrich_adds_columns_without_touching_source():
     assert list(raw.columns) == ["title", "source_name", "days_since_update"]
     assert out.loc[0, ["title_fr", "survey", "theme", "producer", "freshness"]].tolist() == [
         "EDS — Mortalite", "EDS", "Santé", "INStaD", "moins d'un an"]
+
+
+def test_update_period_buckets_by_year_of_last_update():
+    assert oc.update_period(pd.Timestamp("2024-01-01")) == "depuis 2024"
+    assert oc.update_period(pd.Timestamp("2023-12-31 23:00")) == "2020 à 2023"
+    assert oc.update_period(pd.Timestamp("2020-01-01")) == "2020 à 2023"
+    assert oc.update_period(pd.Timestamp("2019-12-31")) == "avant 2020"
+    assert oc.update_period(None) == "date inconnue"
+    assert oc.update_period(pd.NaT) == "date inconnue"
+
+
+def test_age_table_counts_per_producer_with_total():
+    df = pd.DataFrame({
+        "producer": ["INStaD", "INStaD", "Ministères", "INStaD"],
+        "last_updated_on": pd.to_datetime(["2025-03-01", "2018-06-01", "2021-01-01", "2024-02-02"]),
+    })
+    table = oc.age_table(df, "producer")
+    assert list(table.columns) == ["depuis 2024", "2020 à 2023", "avant 2020", "total"]  # pas de « date inconnue » vide
+    assert table.loc["INStaD"].tolist() == [2, 0, 1, 3]
+    assert table.loc["Ministères"].tolist() == [0, 1, 0, 1]
+    assert table.index[0] == "INStaD"  # trié par total décroissant

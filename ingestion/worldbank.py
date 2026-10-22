@@ -90,3 +90,42 @@ def indicator_catalog(cfg: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 CATALOG_COLUMNS = ["indicator_code", "label_fr", "theme", "unit_fr", "higher_is_better", "section"]
+
+
+# --- Métadonnées des indicateurs (définition officielle, organisme producteur) ----------
+# Endpoint en français (/v2/fr/indicator) : nom et organisme traduits par la World Bank ;
+# la définition (sourceNote) reste souvent en anglais, on la garde telle que publiée.
+META_COLUMNS = ["indicator_code", "name_source", "definition", "source_organization", "ingested_at"]
+
+
+def normalize_meta(item: dict[str, Any], ingested_at: str) -> dict[str, Any]:
+    def s(key: str) -> str | None:
+        val = item.get(key)
+        return val.strip() if isinstance(val, str) and val.strip() else None
+
+    return {
+        "indicator_code": item["id"],
+        "name_source": s("name"),
+        "definition": s("sourceNote"),
+        "source_organization": s("sourceOrganization"),
+        "ingested_at": ingested_at,
+    }
+
+
+def fetch_metadata(cfg: dict[str, Any], client: HttpClient | None = None) -> list[dict[str, Any]]:
+    client = client or HttpClient()
+    ingested_at = utc_now()
+    out = []
+    for ind in cfg["indicators"]:
+        _, data = parse_page(client.get_json(f"{cfg['base_url']}/fr/indicator/{ind['code']}", {"format": "json"}))
+        for item in data:
+            row = normalize_meta(item, ingested_at)
+            # Traduction parfois vide (ex. NV.SRV.TOTL.ZS) : on complète avec la version anglaise
+            if not all(row[k] for k in ("name_source", "definition", "source_organization")):
+                _, en = parse_page(client.get_json(f"{cfg['base_url']}/indicator/{ind['code']}", {"format": "json"}))
+                if en:
+                    en_row = normalize_meta(en[0], ingested_at)
+                    row = {k: row[k] or en_row[k] for k in META_COLUMNS}
+            out.append(row)
+    log.info("World Bank : métadonnées de %s indicateurs", len(out))
+    return out

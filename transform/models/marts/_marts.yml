@@ -29,6 +29,13 @@ models:
   - name: fct_indicator_values
     description: Une ligne par indicateur × pays × année (valeurs renseignées uniquement).
     columns:
+      - name: collection_status
+        description: collectée (API de la source) ou démo (valeur synthétique de `make demo`).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [collectée, démo]
       - name: observation_id
         data_tests: [unique, not_null]
       - name: value
@@ -49,6 +56,12 @@ models:
   - name: mart_latest_values
     description: Dernière valeur par indicateur × pays et évolution sur `trend_years` ans.
     columns:
+      - name: collection_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [collectée, démo]
       - name: latest_id
         data_tests: [unique, not_null]
 
@@ -71,13 +84,13 @@ models:
                   - données insuffisantes
 
   - name: mart_data_catalog
-    description: Catalogue unifié des données connues sur le Bénin (indicateurs, enquêtes INStaD, fichiers déposés).
+    description: Catalogue unifié des données connues sur le Bénin (indicateurs, enquêtes INStaD, jeux ODFA et HDX, fichiers déposés, sources seulement référencées).
     columns:
       - name: kind
         data_tests:
           - accepted_values:
               arguments:
-                values: [indicateur, enquête, fichier déposé, jeu de données]
+                values: [indicateur, enquête, fichier déposé, jeu de données, source référencée]
       - name: title
         data_tests: [not_null]
 
@@ -93,3 +106,65 @@ models:
           - accepted_values:
               arguments:
                 values: [ok, échec, non collecté]
+
+  - name: mart_source_availability
+    description: >
+      Baromètre de l'accès aux données : une ligne par source testée, avec le dernier statut,
+      le taux de disponibilité sur tout l'historique et la date de la dernière réponse réussie.
+      « En panne » = la source ne répond pas ; cela ne dit rien de l'existence de la donnée.
+    columns:
+      - name: source
+        data_tests: [unique, not_null]
+      - name: last_tested_at
+        data_tests: [not_null]
+      - name: badge
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [joignable, en panne, collecte interdite]
+      - name: reachability
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [joignable, en panne]
+      - name: collection_policy
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [autorisée, catalogue seulement, interdite]
+      - name: n_tests
+        data_tests: [not_null]
+
+  - name: mart_odin_scores
+    description: >
+      Scores ODIN (Open Data Watch, CC BY 4.0) : ouverture et couverture des statistiques officielles,
+      de 0 à 100, pour le Bénin et ses pays de comparaison, à chaque édition. Méthodologie revue entre
+      éditions : les évolutions dans le temps sont indicatives.
+    columns:
+      - name: odin_id
+        data_tests: [unique, not_null]
+      - name: overall_score
+        data_tests: [not_null]
+      - name: country_iso3
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: country_iso3
+
+  - name: mart_gbif_yearly
+    description: >
+      Biodiversité au Bénin (GBIF) : occurrences par année d'observation et jeux publiés par des
+      organismes béninois par année d'enregistrement. Agrégats seulement.
+    columns:
+      - name: gbif_id
+        data_tests: [unique, not_null]
+      - name: metric
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [occurrences, jeux publiés]
+      - name: value
+        data_tests: [not_null]

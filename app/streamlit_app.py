@@ -142,7 +142,10 @@ def fmt_change(row: pd.Series) -> str | None:
 def fmt_date(value) -> str:
     if value is None or pd.isna(value):
         return "inconnue"
-    return pd.Timestamp(value).strftime("%d/%m/%Y")
+    try:
+        return pd.Timestamp(value).strftime("%d/%m/%Y")
+    except (ValueError, TypeError):  # ex. marqueur « DEMO-SYNTHETIQUE » de make demo : affiché tel quel
+        return str(value)
 
 
 def ordinal(rank: int) -> str:
@@ -213,13 +216,60 @@ def indicator_cards(rows: pd.DataFrame, history: pd.DataFrame, median_label: str
                 else ("normal" if row.higher_is_better else "inverse"),
                 delta_description=("⚠️ " if row.is_stale else "") + short,
                 icon=THEMES.get(row.theme, ":material/label:"),
-                help=f"{row.theme} · unité : {row.unit_fr}. {row.position_vs_peers.capitalize()} "
-                     f"({median_label} : {fmt(row.peer_median, row.unit_fr)}).{stale} "
-                     f"Source : World Bank, indicateur {row.indicator_code}.",
+                help=f"{row.theme} · unité : {row.unit_fr}"
+                     + ("" if pd.isna(row.latest_year) else f" · valeur de {int(row.latest_year)}")
+                     + f". {row.position_vs_peers.capitalize()} "
+                     f"({median_label} : {fmt(row.peer_median, row.unit_fr)}).{stale}\n\n"
+                     f"{definition_text(row.indicator_code)}\n\n{source_line(row.indicator_code)}",
                 chart_data=values if len(values) > 1 else None,
                 chart_type="area",
                 border=True,
             )
+
+
+def source_line(code: str) -> str:
+    """« Source : World Bank (organisme), indicateur X, publié le JJ/MM/AAAA »."""
+    m = INDICATOR_META.loc[code]
+    org = f" ({m.source_organization.rstrip('. ')})" if pd.notna(m.source_organization) else ""
+    published = f", publié le {fmt_date(m.source_published_on)}" if pd.notna(m.source_published_on) else ""
+    return f"Source : {m.source_name}{org}, indicateur {code}{published}."
+
+
+def definition_text(code: str) -> str:
+    """Définition telle que publiée par la source (souvent en anglais), sinon le dire."""
+    definition = INDICATOR_META.loc[code, "definition"]
+    if pd.isna(definition):
+        return "Définition non disponible : métadonnées de la source pas encore collectées (`make run`)."
+    return f"Définition de la source : {definition}"
+
+
+def definition_md(code: str) -> str:
+    """Bloc complet à côté d'un chiffre : nom officiel, définition, unité, source."""
+    m = INDICATOR_META.loc[code]
+    official = f" · nom officiel : *{m.name_source}*" if pd.notna(m.name_source) else ""
+    return (f"**{m.label_fr}** · unité : {m.unit_fr}{official}  \n{definition_text(code)}  \n"
+            f"[{source_line(code)}]({m.source_url})")
+
+
+def indicator_export(code: str) -> pd.DataFrame:
+    """Série complète d'un indicateur (7 pays, toutes années) prête à télécharger :
+    chaque valeur avec son unité, son statut de collecte et sa source."""
+    m = INDICATOR_META.loc[code]
+    data = query(
+        """
+        select f.*, c.country_name_fr
+        from marts.fct_indicator_values f
+        join marts.dim_country c using (country_iso3)
+        where f.indicator_code = ?
+        order by c.country_name_fr, f.year
+        """,
+        (code,),
+    )
+    # Exports antérieurs : statuts absents, colonnes gardées seulement si présentes
+    keep = [c for c in ("country_iso3", "country_name_fr", "year", "value", "collection_status", "obs_status",
+                        "source_last_updated") if c in data.columns]
+    return data[keep].assign(indicator_code=code, indicator_label=m.label_fr, unit=m.unit_fr,
+                             source=m.source_name, source_url=m.source_url)
 
 
 def country_profile(iso: str) -> pd.DataFrame:
@@ -275,6 +325,11 @@ indicators = query("select * from marts.dim_indicator")
 if "section" not in indicators.columns:
     indicators["section"] = "tableau de bord"
 dashboard_codes = set(indicators.loc[indicators.section == "tableau de bord", "indicator_code"])
+# Définitions officielles (exports antérieurs sans métadonnées : colonnes vides)
+for col in ("name_source", "definition", "source_organization", "source_published_on"):
+    if col not in indicators.columns:
+        indicators[col] = None
+INDICATOR_META = indicators.set_index("indicator_code")
 scorecard_all = scorecard
 scorecard = scorecard_all[scorecard_all.indicator_code.isin(dashboard_codes)]
 latest = query(
@@ -293,6 +348,18 @@ try:
     odfa = odfa_catalog.enrich(query("select * from marts.mart_odfa_datasets"))
 except duckdb.Error:  # entrepôt antérieur à l'ajout d'ODFA
     odfa = pd.DataFrame()
+try:
+    availability = query("select * from marts.mart_source_availability order by source")
+except duckdb.Error:  # entrepôt ou exports antérieurs au baromètre
+    availability = pd.DataFrame()
+try:
+    gbif = query("select * from marts.mart_gbif_yearly order by metric, year")
+except duckdb.Error:  # entrepôt ou exports antérieurs à GBIF
+    gbif = pd.DataFrame()
+try:
+    odin_scores = query("select * from marts.mart_odin_scores order by edition_year, country_iso3")
+except duckdb.Error:  # entrepôt ou exports antérieurs à ODIN
+    odin_scores = pd.DataFrame()
 freshness = query(
     "select max(source_last_updated) as src, max(ingested_at) as ing from marts.fct_indicator_values"
 ).iloc[0]
@@ -349,13 +416,14 @@ if is_demo:
         icon=":material/warning:",
     )
 
-tab_score, tab_country, tab_invest, tab_compare, tab_odfa, tab_catalog, tab_about = st.tabs([
+tab_score, tab_country, tab_invest, tab_compare, tab_odfa, tab_catalog, tab_access, tab_about = st.tabs([
     ":material/dashboard: Tableau de bord",
     ":material/flag: Fiche pays",
     ":material/business_center: Investir au Bénin",
     ":material/compare_arrows: Comparer",
     ":material/folder_open: Open Data for Africa",
     ":material/menu_book: Catalogue",
+    ":material/network_check: Accès aux données",
     ":material/info: Méthode",
 ])
 
@@ -777,6 +845,9 @@ with tab_invest:
             "*Doing Business* n'est pas utilisé : la Banque mondiale l'a arrêté en 2021 après des irrégularités.",
             icon=":material/lightbulb:",
         )
+        with st.expander("Définitions des indicateurs de cet onglet", icon=":material/menu_book:"):
+            for code in indicators.loc[indicators.section == "investir", "indicator_code"]:
+                st.markdown(definition_md(code))
         st.caption("Ces analyses éclairent une décision à partir de statistiques publiques ; elles ne constituent "
                    "pas un conseil en investissement. Source : World Bank, World Development Indicators.")
 
@@ -789,7 +860,7 @@ with tab_compare:
         c1, c2 = st.columns([2, 3])
         choice = c1.selectbox(
             "Indicateur", labels,
-            index=labels.index("Utilisateurs d'Internet") if "Utilisateurs d'Internet" in labels else 0,
+            index=labels.index("Personnes utilisant Internet") if "Personnes utilisant Internet" in labels else 0,
         )
         selected_peers = c2.multiselect(f"Pays comparés au {focus_name}", peer_names, default=peer_names)
         code = options[choice]
@@ -811,6 +882,9 @@ with tab_compare:
             years = st.slider("Période", int(series.year.min()), int(series.year.max()),
                               (int(series.year.min()), int(series.year.max())))
             series = series[series.year.between(*years)]
+
+    with st.expander("Définition, unité et source", icon=":material/menu_book:"):
+        st.markdown(definition_md(code))
 
     if series.empty:
         st.info("Aucune donnée pour cet indicateur.")
@@ -875,10 +949,9 @@ with tab_compare:
         n1, n2 = st.columns([4, 1])
         n1.caption(" ".join(notes))
         n2.download_button(
-            "Télécharger (CSV)",
-            to_csv(series[["country_iso3", "country_name_fr", "year", "value"]]
-                   .assign(indicator_code=code, unit=unit)),
-            file_name=f"{code}.csv", mime="text/csv", icon=":material/download:", width="stretch",
+            "Télécharger l'indicateur (CSV)", to_csv(indicator_export(code)),
+            file_name=f"benin_open_data_hub_{code}.csv", mime="text/csv", icon=":material/download:",
+            width="stretch", help="Toutes les années et les 7 pays, avec unité, statut de collecte et source.",
         )
 
 # --- Open Data for Africa ----------------------------------------------------
@@ -909,6 +982,48 @@ with tab_odfa:
         k4.metric("Licence déclarée", int(licensed), border=True,
                   delta=f"{share(licensed, len(odfa))} du total", delta_color="off", delta_arrow="off",
                   help="Sans licence déclarée, vérifier les conditions d'utilisation sur le portail.")
+
+        # Âge des jeux : année de la dernière mise à jour déclarée par le portail
+        st.space("small")
+        st.subheader("Âge des jeux de données")
+        periods = odfa.update_period.value_counts()
+        a1, a2, a3 = st.columns(3)
+        for col, period in zip((a1, a2, a3), odfa_catalog.UPDATE_PERIODS):
+            n = int(periods.get(period, 0))
+            label = {"depuis 2024": "Mis à jour depuis 2024", "2020 à 2023": "Dernière mise à jour entre 2020 et 2023",
+                     "avant 2020": "Dernière mise à jour avant 2020"}[period]
+            col.metric(label, n, border=True, delta=f"{share(n, len(odfa))} du total", delta_color="off", delta_arrow="off")
+        if periods.get("date inconnue", 0):
+            st.caption(f"{int(periods['date inconnue'])} jeu(x) sans date de mise à jour.")
+        ages = odfa_catalog.age_table(odfa, "producer")
+        age_colors = {"depuis 2024": FOCUS_COLOR, "2020 à 2023": "#E8B200", "avant 2020": NEUTRAL,
+                      "date inconnue": "#E3E5DF"}
+        with st.container(border=True):
+            st.markdown("**Par producteur** · nombre de jeux selon l'année de dernière mise à jour")
+            fig = go.Figure()
+            for period in [c for c in ages.columns if c != "total"]:
+                fig.add_trace(go.Bar(
+                    y=ages.index, x=ages[period], name=period, orientation="h",
+                    marker=dict(color=age_colors[period], line=dict(width=1, color="white")),
+                    text=[str(v) if v else "" for v in ages[period]], textposition="inside",
+                    insidetextanchor="middle", hovertemplate=f"%{{y}} · {period} : %{{x}} jeux<extra></extra>",
+                ))
+            style_fig(fig, height=80 + 45 * len(ages))
+            fig.update_layout(barmode="stack", bargap=0.3, legend=dict(orientation="h", y=1.1, x=0, traceorder="normal"),
+                              margin=dict(l=10, r=10, t=40, b=10))
+            fig.update_xaxes(showticklabels=False, showgrid=False)
+            fig.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig, width="stretch")
+            st.caption("Producteurs regroupés en familles (INStaD et ex-INSAE, ministères, agences publiques, "
+                       "organismes internationaux). Date de mise à jour déclarée par le portail : elle peut être "
+                       "postérieure à la période couverte par les données.")
+            with st.expander("Détail par producteur, tel que saisi sur le portail"):
+                detail = odfa_catalog.age_table(odfa, "source_name")
+                st.dataframe(detail, width="stretch",
+                             alt="Nombre de jeux Open Data for Africa par producteur et période de mise à jour")
+                st.download_button("Télécharger (CSV)", to_csv(detail.reset_index()),
+                                   file_name="odfa_age_par_producteur.csv", mime="text/csv",
+                                   icon=":material/download:")
 
         g1, g2 = st.columns([3, 2])
         with g1.container(border=True):
@@ -994,13 +1109,15 @@ with tab_catalog:
     st.space("small")
     st.markdown(
         "Tout ce que le hub sait des données disponibles sur le Bénin, au même endroit : indicateurs "
-        "suivis, jeux du portail Open Data for Africa, enquêtes de l'INStaD et fichiers ouverts ajoutés "
-        "à la main (data.gouv.bj)."
+        "suivis, jeux du portail Open Data for Africa et de HDX, enquêtes de l'INStaD, fichiers ouverts ajoutés "
+        "à la main (data.gouv.bj) et sources seulement référencées, faute de licence ou d'API "
+        "(budget, ARCEP, IGN)."
     )
     counts = catalog.kind.value_counts()
     if len(counts):
         for col, (kind, n) in zip(st.columns(len(counts) + 1), counts.items()):
-            plural = {"jeu de données": "jeux de données", "fichier déposé": "fichiers déposés"}.get(kind, kind + "s")
+            plural = {"jeu de données": "jeux de données", "fichier déposé": "fichiers déposés",
+                      "source référencée": "sources référencées"}.get(kind, kind + "s")
             col.metric((plural if n > 1 else kind).capitalize(), int(n), border=True)
 
     with st.container(border=True):
@@ -1026,10 +1143,41 @@ with tab_catalog:
         },
         hide_index=True, width="stretch",
     )
-    c1, c2 = st.columns([4, 1])
-    c1.caption(f"{len(view)} entrée(s).")
-    c2.download_button("Télécharger (CSV)", to_csv(view[columns]), file_name="catalogue_benin.csv",
-                       mime="text/csv", icon=":material/download:", width="stretch")
+    c1, c2, c3 = st.columns([3, 1, 1])
+    c1.caption(f"{len(view)} entrée(s) sur {len(catalog)}.")
+    c2.download_button("Sélection (CSV)", to_csv(view[columns]), file_name="catalogue_benin_selection.csv",
+                       mime="text/csv", icon=":material/download:", width="stretch",
+                       help="Les entrées affichées, avec les filtres en cours.")
+    c3.download_button("Catalogue complet (CSV)", to_csv(catalog[columns]), file_name="catalogue_benin_complet.csv",
+                       mime="text/csv", icon=":material/download:", width="stretch",
+                       help="Toutes les entrées du catalogue, sans filtre.")
+    st.markdown(
+        f":material/add_circle: Vous connaissez une source de données sur le Bénin qui manque ici ? "
+        f"[Proposer une source]({REPO_URL}/issues/new?template=proposer-une-source.yml) "
+        "(nom, URL, producteur, licence, format). Chaque proposition est auditée avant ajout."
+    )
+
+    if not gbif.empty:
+        st.space("small")
+        st.subheader("Biodiversité : le Bénin sur GBIF")
+        occ = gbif[gbif.metric == "occurrences"]
+        pub = gbif[gbif.metric == "jeux publiés"]
+        b1, b2 = st.columns(2)
+        b1.metric("Occurrences datées observées au Bénin", f"{int(occ.value.sum()):,}".replace(",", "\u202f"),
+                  border=True, help="Observations d'espèces localisées au Bénin et datées (somme par année "
+                                    "d'observation) ; les occurrences sans année ne sont pas comptées.")
+        b2.metric("Jeux publiés par des organismes béninois", int(pub.value.sum()), border=True)
+        with st.container(border=True):
+            st.markdown("**Occurrences par année d'observation** · depuis 1990")
+            recent = occ[occ.year >= 1990]
+            fig = go.Figure(go.Bar(x=recent.year, y=recent.value, marker=dict(color=FOCUS_COLOR, cornerradius=3),
+                                   hovertemplate="%{x} : %{y:,} occurrences<extra></extra>"))
+            style_fig(fig, height=260)
+            fig.update_layout(showlegend=False, bargap=0.2)
+            st.plotly_chart(fig, width="stretch")
+            st.caption("Source : [GBIF](https://www.gbif.org/country/BJ/summary), API publique ; licence propre "
+                       "à chaque jeu (CC0, CC BY, CC BY-NC). Agrégats seulement : les occurrences ne sont pas copiées.")
+
     if hidden_demo:
         st.info(
             f"{hidden_demo} entrée(s) de démonstration masquée(s) : le catalogue INStaD (NADA) est "
@@ -1040,6 +1188,126 @@ with tab_catalog:
         st.info("Le catalogue INStaD (NADA) est momentanément indisponible : les enquêtes "
                 "réapparaîtront dès que le site sera de nouveau en ligne.", icon=":material/info:")
 
+# --- Accès aux données -------------------------------------------------------
+with tab_access:
+    st.space("small")
+    st.markdown(
+        "Chaque collecte teste aussi l'accès à toutes les sources du hub, y compris celles qui ne sont "
+        "que cataloguées. **Une source inaccessible n'est pas une donnée absente** : quand un serveur ne "
+        "répond pas, la donnée existe peut-être, mais personne ne peut la consulter à ce moment-là."
+    )
+    if availability.empty:
+        st.info("Baromètre pas encore alimenté : lance `make run` (ou le workflow `refresh` sur GitHub).",
+                icon=":material/info:")
+    else:
+        n_ok = int((availability.badge == "joignable").sum())
+        n_down = int((availability.badge == "en panne").sum())
+        n_forbidden = int((availability.badge == "collecte interdite").sum())
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Sources testées", len(availability), border=True)
+        k2.metric("Joignables", n_ok, border=True)
+        k3.metric("En panne", n_down, border=True,
+                  help="Pas de réponse, erreur serveur, accès refusé ou page introuvable au dernier test.")
+        k4.metric("Collecte interdite", n_forbidden, border=True,
+                  help="Le site interdit la collecte automatisée (robots.txt) : seul /robots.txt est testé, "
+                       "les fichiers sont déposés à la main.")
+
+        badges = {"joignable": "🟢 joignable", "en panne": "🔴 en panne", "collecte interdite": "⛔ collecte interdite"}
+        table = availability.assign(
+            badge_txt=availability.badge.map(badges).fillna(availability.badge),
+            http_txt=availability.last_http_status.map(lambda c: "—" if pd.isna(c) else str(int(c))),
+            api_txt=availability.official_api.map({True: "oui", False: "non"}),
+            # Heure du test en UTC, sans fuseau : Streamlit l'affiche telle quelle
+            tested=pd.to_datetime(availability.last_tested_at, utc=True).dt.tz_localize(None),
+            success=pd.to_datetime(availability.last_success_at, utc=True).dt.tz_localize(None),
+        )
+        columns = ["source", "badge_txt", "http_txt", "last_response_time_ms", "availability_rate", "n_tests",
+                   "success", "tested", "api_txt", "license", "collection_policy", "last_error", "url_tested"]
+        st.dataframe(
+            table[columns],
+            column_config={
+                "source": st.column_config.TextColumn("Source", width="medium"),
+                "badge_txt": "Statut",
+                "http_txt": "Code HTTP",
+                "last_response_time_ms": st.column_config.NumberColumn("Temps de réponse", format="%d ms"),
+                "availability_rate": st.column_config.ProgressColumn(
+                    "Disponibilité", format="percent", min_value=0, max_value=1,
+                    help="Part des tests réussis sur tout l'historique du baromètre."),
+                "n_tests": st.column_config.NumberColumn("Tests", help="Nombre de tests depuis le début."),
+                "success": st.column_config.DatetimeColumn("Dernière réponse réussie (UTC)", format="DD/MM/YYYY HH:mm"),
+                "tested": st.column_config.DatetimeColumn("Dernier test (UTC)", format="DD/MM/YYYY HH:mm"),
+                "api_txt": "API officielle",
+                "license": "Licence",
+                "collection_policy": "Collecte",
+                "last_error": "Dernière erreur",
+                "url_tested": st.column_config.LinkColumn("Adresse testée"),
+            },
+            hide_index=True, width="stretch",
+            alt="Baromètre de l'accès aux sources de données : statut et disponibilité par source",
+        )
+        c1, c2 = st.columns([4, 1])
+        c1.caption(
+            "Un test = une requête unique, sans nouvel essai, à l'heure de la collecte. Joignable = réponse "
+            "HTTP 2xx ou 3xx. Un 403 signale souvent une protection anti-robots (Open Data for Africa) ; "
+            "le hub ne la contourne pas."
+        )
+        c2.download_button("Télécharger (CSV)", to_csv(availability), file_name="acces_sources_benin.csv",
+                           mime="text/csv", icon=":material/download:", width="stretch")
+
+    # Ouverture des statistiques officielles : scores ODIN (Open Data Watch)
+    st.space("small")
+    st.subheader("Ouverture des statistiques officielles (ODIN)")
+    st.caption("L'Open Data Inventory d'Open Data Watch note de 0 à 100 la couverture (quelles statistiques "
+               "sont publiées) et l'ouverture (formats, licences, téléchargement) des statistiques officielles "
+               "de chaque pays.")
+    if odin_scores.empty:
+        st.info("Scores ODIN pas encore collectés : lance `make run`.", icon=":material/info:")
+    else:
+        last_edition = int(odin_scores.edition_year.max())
+        current = odin_scores[odin_scores.edition_year == last_edition].sort_values("overall_score")
+        focus_row = current[current.country_iso3 == FOCUS]
+        if len(focus_row):
+            f = focus_row.iloc[0]
+            o1, o2, o3, o4 = st.columns(4)
+            o1.metric(f"Score ODIN {last_edition}", f"{f.overall_score:.1f}".replace(".", ","), border=True)
+            o2.metric("Couverture", f"{f.coverage_score:.1f}".replace(".", ","), border=True)
+            o3.metric("Ouverture", f"{f.openness_score:.1f}".replace(".", ","), border=True)
+            o4.metric(f"Rang parmi les {int(f.n_hub_countries)} pays du hub", ordinal(int(f.rank_among_hub)),
+                      border=True,
+                      help=None if pd.isna(f.rank_world) else
+                      f"{ordinal(int(f.rank_world))} sur {int(f.n_countries_ranked)} pays dans le monde.")
+        d1, d2 = st.columns([2, 3])
+        with d1.container(border=True):
+            st.markdown(f"**Score global {last_edition}** · sur 100")
+            fig = go.Figure(go.Bar(
+                x=current.overall_score, y=current.country_name_fr, orientation="h",
+                marker=dict(color=[COLORS[i] for i in current.country_iso3], cornerradius=4),
+                text=[f"{v:.1f}" for v in current.overall_score], textposition="outside", cliponaxis=False,
+                hovertemplate="%{y} : %{x:.1f} / 100<extra></extra>",
+            ))
+            style_fig(fig, height=320)
+            fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=50, t=10, b=10))
+            fig.update_xaxes(showticklabels=False, showgrid=False, range=[0, 100])
+            st.plotly_chart(fig, width="stretch")
+        with d2.container(border=True):
+            st.markdown("**Évolution du score global** · éditions ODIN")
+            fig = go.Figure()
+            for (iso, name), g in odin_scores.groupby(["country_iso3", "country_name_fr"]):
+                focus = iso == FOCUS
+                fig.add_trace(go.Scatter(
+                    x=g.edition_year, y=g.overall_score, name=name, mode="lines+markers",
+                    line=dict(color=COLORS[iso], width=4 if focus else 2), legendrank=1 if focus else 10,
+                    hovertemplate=f"{name} · %{{x}} : %{{y:.1f}}<extra></extra>",
+                ))
+            fig.data = tuple(sorted(fig.data, key=lambda t: t.line.width))
+            style_fig(fig, height=320)
+            fig.update_layout(legend=dict(orientation="h", y=-0.2, x=0), hovermode="x unified")
+            fig.update_xaxes(tickvals=sorted(odin_scores.edition_year.unique()))
+            fig.update_yaxes(range=[0, 100])
+            st.plotly_chart(fig, width="stretch")
+        st.caption("Source : [Open Data Watch, Open Data Inventory](https://odin.opendatawatch.com/), licence "
+                   "CC BY 4.0. La méthodologie a changé entre éditions : les évolutions sont indicatives.")
+
 # --- Méthode -----------------------------------------------------------------
 with tab_about:
     st.space("small")
@@ -1049,10 +1317,13 @@ with tab_about:
             """
 :material/database: **Sources**
 
-- *World Bank — World Development Indicators*, API publique v2 : indicateurs du tableau de bord et de l'onglet Investir.
+- *World Bank — World Development Indicators*, API publique v2 : indicateurs du tableau de bord et de l'onglet Investir, avec leur définition officielle.
 - *INStaD — catalogue de microdonnées (NADA)* : métadonnées des enquêtes uniquement.
 - *Open Data for Africa — Bénin* (BAD) : inventaire des jeux via l'API du portail (titre, producteur, mise à jour, licence).
+- *ODIN* (Open Data Watch, CC BY 4.0) : scores d'ouverture des statistiques officielles.
+- *GBIF* : agrégats annuels de biodiversité ; *HDX* (OCHA) : catalogue des jeux humanitaires.
 - *data.gouv.bj* : fichiers téléchargés à la main (le portail n'autorise pas la collecte automatisée), avec URL et date de téléchargement tracées.
+- Budget (DGB), ARCEP, IGN : seulement référencés au catalogue (licence absente ou restrictive, pas d'API).
 """
         )
     with m2.container(border=True, height="stretch"):
@@ -1076,6 +1347,48 @@ with tab_about:
 Projet open source : pipeline Python → DuckDB → dbt → Streamlit. [Code sur GitHub]({REPO_URL}).
 """
         )
+
+    with st.container(border=True):
+        st.markdown(
+            """
+:material/network_check: **Inaccessible n'est pas absente**
+
+Une source **inaccessible** ne répond pas au moment du test (serveur en panne, maintenance, accès refusé,
+nom de domaine introuvable) : la donnée existe peut-être, mais personne ne peut la consulter. Une donnée
+**absente** n'est pas publiée par une source qui, elle, répond (ex. aucune valeur de dépenses de R&D pour
+le Bénin à la World Bank). Le hub teste chaque source à chaque collecte (onglet *Accès aux données*) et
+n'invente jamais de valeur : une case vide reste vide. Chaque valeur porte un statut de collecte
+(*collectée* ou *démo*) et la date de publication de sa source.
+"""
+        )
+
+    st.space("small")
+    st.subheader("Définitions des indicateurs")
+    st.caption("Définitions telles que publiées par la source (la World Bank ne les traduit pas toutes en "
+               "français). Année : dernière valeur publiée pour le Bénin. Abonnements et personnes ne se "
+               "comparent pas : 120 abonnements mobiles pour 100 habitants ne veulent pas dire que tout le "
+               "monde a un téléphone.")
+    benin_years = latest[latest.country_iso3 == FOCUS].set_index("indicator_code").latest_year
+    definitions = indicators.assign(
+        benin_year=indicators.indicator_code.map(benin_years),
+        source=[f"{n} ({o})" if pd.notna(o) else n for n, o in zip(indicators.source_name, indicators.source_organization)],
+    ).sort_values(["section", "theme", "label_fr"])
+    def_columns = ["label_fr", "unit_fr", "definition", "benin_year", "source", "source_published_on",
+                   "indicator_code", "source_url"]
+    st.dataframe(
+        definitions[def_columns],
+        column_config={
+            "label_fr": st.column_config.TextColumn("Indicateur", width="medium"),
+            "unit_fr": "Unité",
+            "definition": st.column_config.TextColumn("Définition de la source", width="large"),
+            "benin_year": st.column_config.NumberColumn("Année (Bénin)", format="%d"),
+            "source": "Source",
+            "source_published_on": st.column_config.DateColumn("Publié le", format="DD/MM/YYYY"),
+            "indicator_code": "Code",
+            "source_url": st.column_config.LinkColumn("Lien", display_text="ouvrir"),
+        },
+        hide_index=True, width="stretch", alt="Définitions, unités et sources de tous les indicateurs",
+    )
 
 st.divider()
 st.caption(

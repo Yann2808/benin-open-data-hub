@@ -50,14 +50,16 @@ worldbank:
       unit: "% annuel"
       higher_is_better: false
     - code: IT.NET.USER.ZS
-      label: Utilisateurs d'Internet
+      # Personnes (et non abonnements) : ne jamais confondre avec les indicateurs « pour 100 habitants »
+      label: Personnes utilisant Internet
       theme: Numérique
       unit: "% de la population"
       higher_is_better: true
     - code: IT.CEL.SETS.P2
-      label: Abonnements mobiles
+      # Abonnements (une personne peut en avoir plusieurs) : ce n'est pas une part de la population
+      label: Abonnements à la téléphonie mobile
       theme: Numérique
-      unit: pour 100 habitants
+      unit: abonnements pour 100 habitants
       higher_is_better: true
     - code: EG.ELC.ACCS.ZS
       label: Accès à l'électricité
@@ -74,6 +76,20 @@ worldbank:
       theme: Emploi
       unit: "% de la population active"
       higher_is_better: false
+
+    # --- Socle numérique (vérifié le 2026-10-20, voir docs/audit_sources.md) -------------
+    # Non ajouté : dépenses de R&D (GB.XPD.RSDV.GD.ZS), aucune valeur publiée pour le Bénin.
+    - code: IT.NET.BBND.P2
+      # Abonnements (et non personnes) : à ne pas comparer avec « Personnes utilisant Internet »
+      label: Abonnements à l'Internet haut débit fixe
+      theme: Numérique
+      unit: abonnements pour 100 habitants
+      higher_is_better: true
+    - code: SE.TER.ENRR
+      label: Taux brut de scolarisation dans le supérieur
+      theme: Éducation
+      unit: "% brut"
+      higher_is_better: true
 
     # --- Investir au Bénin : marché, stabilité, climat des affaires --------------
     # Écartés faute de données récentes pour la plupart des 7 pays (vérifié le 2026-10-14) :
@@ -177,3 +193,100 @@ odfa:
   exclude: []             # ids à ignorer (ex. jeux trop lourds)
   # Facultatif, pour relever les quotas d'appels : variables d'environnement
   # ODFA_APP_ID et ODFA_APP_SECRET (créées sur https://benin.opendataforafrica.org/user/apps).
+
+source_health:
+  # Baromètre de l'accès aux données (ingestion/health.py) : une requête GET légère
+  # par source à chaque `make run`, sans retry. Chaque source du projet y figure,
+  # y compris celles qui sont seulement cataloguées.
+  # collection_policy : autorisée | catalogue seulement | interdite.
+  # Collecte interdite (robots.txt) : on ne teste que /robots.txt, toujours autorisé.
+  - source: World Bank (API WDI)
+    url: https://api.worldbank.org/v2/country/BEN/indicator/SP.POP.TOTL?format=json&per_page=1
+    official_api: true
+    license: CC BY 4.0
+    collection_policy: autorisée
+  - source: INStaD (catalogue NADA)
+    url: https://nada.instad.bj/index.php/api/catalog/search?ps=1
+    official_api: true
+    license: non précisée
+    collection_policy: autorisée
+  - source: Open Data for Africa — Bénin (API Knoema)
+    url: https://benin.opendataforafrica.org/api/1.0/meta/dataset
+    official_api: true
+    license: variable selon le jeu
+    collection_policy: autorisée
+  - source: ODIN — Open Data Inventory (Open Data Watch)
+    # API du site public, non documentée : comptée comme non officielle
+    url: https://odin-aim.akroninc.net/api/api/client/GetLastUpdatedDate
+    official_api: false
+    license: CC BY 4.0
+    collection_policy: autorisée
+  - source: GBIF — biodiversité (API)
+    url: https://api.gbif.org/v1/occurrence/search?country=BJ&limit=0
+    official_api: true
+    license: variable selon le jeu (CC0, CC BY, CC BY-NC)
+    collection_policy: autorisée
+  - source: HDX — données humanitaires (API CKAN)
+    url: https://data.humdata.org/api/3/action/package_search?fq=groups:ben&rows=0
+    official_api: true
+    license: variable selon le jeu (CC BY majoritaire)
+    collection_policy: autorisée
+  # Sources seulement cataloguées (voir catalog_sources ci-dessous) : on teste la page publique
+  - source: Données budgétaires (DGB)
+    url: https://opendata.budgetbenin.bj/
+    official_api: false
+    license: non précisée
+    collection_policy: catalogue seulement
+  - source: ARCEP Bénin — Observatoire de l'Internet
+    url: https://arcep.bj/internet/
+    official_api: false
+    license: reproduction interdite sans accord écrit
+    collection_policy: catalogue seulement
+  - source: IGN Bénin — base de données spatiales
+    url: https://ign.bj/webmap/
+    official_api: false
+    license: non précisée
+    collection_policy: catalogue seulement
+  - source: data.gouv.bj
+    url: https://data.gouv.bj/robots.txt
+    official_api: false
+    license: variable selon le jeu
+    collection_policy: interdite
+
+odin:
+  # Open Data Inventory (Open Data Watch), licence CC BY 4.0. Source optionnelle.
+  # API JSON du site public, non documentée : voir docs/audit_sources.md. Pays : ceux de `worldbank`.
+  api_base: https://odin-aim.akroninc.net/api/api/client
+  pause_seconds: 1
+
+gbif:
+  # GBIF, API publique documentée (https://techdocs.gbif.org). Agrégats annuels seulement.
+  api_base: https://api.gbif.org/v1
+  country: BJ
+
+hdx:
+  # Humanitarian Data Exchange (OCHA), API CKAN documentée. Catalogue seulement (métadonnées).
+  site: https://data.humdata.org
+  group: ben
+  page_size: 500
+
+catalog_sources:
+  # Sources auditées mais non collectées (licence absente ou restrictive, pas d'API) :
+  # référencées au catalogue avec leur lien. Voir docs/audit_sources.md.
+  - title: Base de données financière de la Direction générale du Budget
+    producer: Direction générale du Budget (DGB)
+    topic: Finances publiques
+    url: https://opendata.budgetbenin.bj/
+    access: catalogue seulement (licence non précisée)
+  - title: Observatoire de l'Internet — tableaux de bord trimestriels (PDF)
+    producer: ARCEP Bénin
+    topic: Numérique
+    url: https://arcep.bj/internet/
+    access: catalogue seulement (reproduction soumise à accord écrit)
+    status: expérimental
+  - title: Base de données spatiales des unités administratives
+    producer: IGN Bénin
+    topic: Géographie
+    url: https://ign.bj/webmap/
+    access: catalogue seulement (licence non précisée)
+
