@@ -11,10 +11,10 @@ from pathlib import Path
 
 import duckdb
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 import yaml
 
+import charts
 import odfa_catalog
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +45,7 @@ THEMES = {
 # Pays frontaliers du Bénin (marché accessible par la route depuis Cotonou)
 BORDERS = ["TGO", "NGA", "NER", "BFA"]
 # Couleurs des secteurs (structure de l'économie) : tons neutres, distincts des couleurs pays
-SECTOR_COLORS = {"NV.AGR.TOTL.ZS": "#A47148", "NV.IND.TOTL.ZS": "#5F6B7A", "NV.SRV.TOTL.ZS": "#D2BF9E"}
+SECTOR_COLORS = {"NV.AGR.TOTL.ZS": "#8B5A33", "NV.IND.TOTL.ZS": "#5F6B7A", "NV.SRV.TOTL.ZS": "#D2BF9E"}
 
 st.set_page_config(page_title="Bénin Open Data Hub", page_icon=":material/insights:", layout="wide")
 
@@ -76,8 +76,8 @@ st.html(
 .st-key-shortcuts a:hover, .st-key-next-page a:hover { background: #E1EFE6; }
 /* Légende des graphiques (chart_key) : pastilles qui passent à la ligne. */
 .bodh-key { display: flex; flex-wrap: wrap; gap: .2rem .9rem; font-size: .85rem; color: #5B6169; margin: .25rem 0 0 0; }
-.bodh-key span { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
-.bodh-key i { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; }
+.bodh-key span { display: inline-flex; align-items: baseline; gap: .35rem; }
+.bodh-key b { font-size: .95rem; line-height: 1; }
 /* Téléphone : en-tête plus compact, valeurs des listes autorisées à passer à la ligne. */
 @media (max-width: 640px) {
   [data-testid="stMainBlockContainer"] { padding-top: 3.5rem; padding-left: 1rem; padding-right: 1rem; }
@@ -185,41 +185,31 @@ def to_csv(df: pd.DataFrame) -> bytes:
     return df.to_csv(index=False).encode("utf-8-sig")
 
 
-# Graphiques sans barre d'outils ni zoom : sur un écran tactile, elle masquait les données
-# et le doigt déplaçait le graphique au lieu de faire défiler la page.
-CHART_CONFIG = {"displayModeBar": False, "scrollZoom": False}
-
-
-def style_fig(fig: go.Figure, height: int) -> go.Figure:
-    fig.update_layout(
-        height=height, margin=dict(l=10, r=10, t=30, b=10),
-        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", color="#1F2328"),
-        hoverlabel=dict(font_family="Inter, sans-serif"),
-        dragmode=False,
-    )
-    fig.update_xaxes(gridcolor="#E9EBE5", linecolor="#E3E5DF", fixedrange=True)
-    fig.update_yaxes(gridcolor="#E9EBE5", automargin=True, fixedrange=True)  # libellés longs jamais coupés
-    return fig
-
-
-def chart_key(items: list[tuple[str, str]]) -> None:
-    """Légende d'un graphique en HTML (libellé, couleur), posée au-dessus du tracé. Elle passe
-    à la ligne sur téléphone, alors que la légende Plotly s'y empilait en colonne sur les données."""
-    spans = "".join(f'<span><i style="background:{color}"></i>{html.escape(label)}</span>' for label, color in items)
+def chart_key(items: list[tuple[str, str]], glyphs: list[str] | None = None) -> None:
+    """Légende d'un graphique en HTML (libellé, couleur), posée au-dessus du tracé : elle passe
+    à la ligne sur téléphone. `glyphs` : forme de chaque entrée (● par défaut)."""
+    glyphs = glyphs or ["●"] * len(items)
+    spans = "".join(f'<span><b style="color:{color}">{glyph}</b>{html.escape(label)}</span>'
+                    for (label, color), glyph in zip(items, glyphs))
     st.html(f'<div class="bodh-key">{spans}</div>')
 
 
-def country_key(isos) -> None:
-    """Légende des pays : le Bénin d'abord, puis l'ordre reçu, couleurs fixes par code ISO."""
+def country_key(isos, shapes: bool = False) -> None:
+    """Légende des pays : le Bénin d'abord, puis l'ordre reçu, couleurs (et formes) fixes par code ISO."""
     names = dict(zip(countries.country_iso3, countries.country_name_fr))
     ordered = sorted(dict.fromkeys(isos), key=lambda iso: iso != FOCUS)
-    chart_key([(names[iso], COLORS[iso]) for iso in ordered])
+    chart_key([(names[iso], COLORS[iso]) for iso in ordered],
+              [charts.GLYPHS[SHAPES[iso]] for iso in ordered] if shapes else None)
 
 
 def wrap_label(text: str, width: int = 20) -> str:
-    """Coupe un libellé d'axe trop long sur deux lignes ou plus (lisible sur téléphone)."""
-    return "<br>".join(textwrap.wrap(text, width)) or text
+    """Coupe un libellé d'axe trop long sur plusieurs lignes (lisible sur téléphone)."""
+    return "\n".join(textwrap.wrap(text, width)) or text
+
+
+def show_chart(chart, description: str) -> None:
+    """Affiche un graphique Altair sur toute la largeur, avec sa description pour les lecteurs d'écran."""
+    st.altair_chart(chart, width="stretch", alt=description)
 
 
 def kpi_row(name: str):
@@ -450,6 +440,9 @@ peer_names = countries.loc[~countries.is_focus, "country_name_fr"].sort_values()
 peer_isos = sorted(countries.loc[~countries.is_focus, "country_iso3"])
 COLORS = {iso: PEER_PALETTE[i % len(PEER_PALETTE)] for i, iso in enumerate(peer_isos)}
 COLORS[FOCUS] = FOCUS_COLOR
+# Forme de chaque pays dans les nuages de points : la couleur n'est jamais le seul repère
+SHAPES = {iso: charts.SHAPES[i % len(charts.SHAPES)] for i, iso in enumerate(peer_isos)}
+SHAPES[FOCUS] = charts.FOCUS_SHAPE
 
 # --- En-tête -----------------------------------------------------------------
 def render_header(page_title: str | None) -> None:
@@ -558,31 +551,22 @@ def page_dashboard() -> None:
         score = ((comparable.latest_value - comparable["min"]) / spread * 100).fillna(50).astype(float)
         comparable["score"] = score.where(comparable.higher_is_better.astype(bool), 100 - score)
         # Tri : indicateurs où le Bénin est le mieux classé en haut
-        order = [wrap_label(t) for t in ranked.sort_values("rank_among_peers", ascending=False).label_fr]
+        order = [wrap_label(t) for t in ranked.sort_values("rank_among_peers").label_fr]
         comparable["axis_label"] = comparable.label_fr.map(wrap_label)
         comparable["value_txt"] = [fmt(v, u) for v, u in zip(comparable.latest_value, comparable.unit_fr)]
 
-        fig = go.Figure()
-        # Bénin en premier dans la légende
-        for (is_focus, name, iso), g in comparable.groupby(["is_focus", "country_name_fr", "country_iso3"]):
-            fig.add_trace(go.Scatter(
-                x=g.score, y=g.axis_label, mode="markers",
-                name=name, legendrank=1 if is_focus else 10,
-                marker=dict(size=16 if is_focus else 10, color=COLORS[iso], line=dict(width=2, color="white")),
-                customdata=g[["country_name_fr", "value_txt", "latest_year", "label_fr"]],
-                hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[3]} : %{customdata[1]} (%{customdata[2]})"
-                              "<extra></extra>",
-            ))
-        fig.data = tuple(sorted(fig.data, key=lambda t: t.marker.size))  # Bénin au premier plan
-        fig.update_yaxes(categoryorder="array", categoryarray=order, title=None, showgrid=True)
-        fig.update_xaxes(range=[-5, 105], showgrid=False, zeroline=False,
-                         tickvals=[0, 100], ticktext=["◀ moins bien", "mieux ▶"])
-        fig.add_vline(x=50, line=dict(color=NEUTRAL, dash="dot", width=1))
-        style_fig(fig, height=80 + 46 * len(order))
-        fig.update_layout(showlegend=False, hovermode="closest", margin=dict(t=10))
+        strip = pd.DataFrame({
+            "axis_label": comparable.axis_label, "score": comparable.score,
+            "color": comparable.country_iso3.map(COLORS), "shape": comparable.country_iso3.map(SHAPES),
+            "size": comparable.is_focus.map({True: 260, False: 90}), "country": comparable.country_name_fr,
+            "indicator": comparable.label_fr,
+            "value_txt": [f"{v} ({int(y)})" for v, y in zip(comparable.value_txt, comparable.latest_year)],
+        })
         with st.container(border=True):
-            country_key(comparable.sort_values("country_name_fr").country_iso3)
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            country_key(comparable.sort_values("country_name_fr").country_iso3, shapes=True)
+            show_chart(charts.position_strip(strip, order=order),
+                       f"Position du {focus_name} et de ses voisins, du moins bien au mieux classé, "
+                       "pour chaque indicateur comparable.")
 
     # Détail : une carte par indicateur, rangées par thème (icône), avec la
     # courbe du Bénin. Grille continue pour ne pas laisser de trous.
@@ -765,26 +749,20 @@ def page_invest() -> None:
                                          (m2, gdp, "PIB", "USD courants")):
             with col.container(border=True):
                 st.markdown(f"**{title}** · cumulée par zone, dernière année publiée")
-                fig = go.Figure()
-                for iso in [FOCUS, *BORDERS, *[i for i in peer_isos if i not in BORDERS]]:
-                    if iso not in values.index:
-                        continue
-                    fig.add_trace(go.Bar(
-                        y=[z for z, _ in zones], x=[values[iso] if iso in members else 0 for _, members in zones],
-                        name=names[iso], orientation="h", marker=dict(color=COLORS[iso], line=dict(width=1, color="white")),
-                        hovertemplate=f"{names[iso]} : {fmt(values[iso], unit)}<extra></extra>",
-                    ))
-                totals = [values.reindex(members).sum() for _, members in zones]
-                for (zone, _), total in zip(zones, totals):
-                    fig.add_annotation(x=total, y=zone, text=f"<b>{fmt(total, unit)}</b>", xanchor="left",
-                                       xshift=6, showarrow=False)
-                style_fig(fig, height=200)
-                fig.update_layout(barmode="stack", bargap=0.35, margin=dict(l=10, r=80, t=10, b=10),
-                                  showlegend=False)
-                country_key([i for i in [FOCUS, *BORDERS, *peer_isos] if i in values.index])
-                fig.update_xaxes(showticklabels=False, showgrid=False)
-                fig.update_yaxes(autorange="reversed")
-                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+                isos = [i for i in dict.fromkeys([FOCUS, *BORDERS, *peer_isos]) if i in values.index]
+                parts = pd.DataFrame([
+                    {"label": zone, "series": names[iso], "value": values[iso], "text": fmt(values[iso], unit)}
+                    for zone, members in zones for iso in isos if iso in members
+                ])
+                totals = pd.DataFrame([
+                    {"label": zone, "value": values.reindex(members).sum(),
+                     "text": fmt(values.reindex(members).sum(), unit)} for zone, members in zones
+                ])
+                country_key(isos)
+                show_chart(charts.stacked_hbars(parts, order=[z for z, _ in zones], series=[names[i] for i in isos],
+                                                colors=[COLORS[i] for i in isos], value_title=title,
+                                                totals=totals, right=80),
+                           f"{title} cumulée : {focus_name} seul, avec ses pays frontaliers, puis avec tout le hub.")
 
         market_codes = ["SP.POP.1564.TO.ZS", "SL.TLF.TOTL.IN", "NY.GDP.PCAP.PP.CD"]
         indicator_cards(invest_rows[invest_rows.indicator_code.isin(market_codes)], focus_series,
@@ -795,22 +773,18 @@ def page_invest() -> None:
             with st.container(border=True):
                 st.markdown("**Structure de l'économie** · part de chaque secteur dans le PIB, dernière année publiée")
                 order = [FOCUS, *sorted(peer_isos, key=lambda i: names[i])]
-                fig = go.Figure()
-                for code in sectors:
-                    v = latest_of(code).reindex(order)
-                    label = indicators.set_index("indicator_code").loc[code, "label_fr"].removesuffix(" (valeur ajoutée)")
-                    fig.add_trace(go.Bar(
-                        y=[names[i] for i in order], x=v.values, name=label, orientation="h",
-                        marker=dict(color=SECTOR_COLORS[code], line=dict(width=1, color="white")),
-                        text=[f"{x:.0f} %" if pd.notna(x) else "" for x in v.values], textposition="inside",
-                        insidetextanchor="middle", hovertemplate=f"%{{y}} · {label} : %{{x:.1f}} % du PIB<extra></extra>",
-                    ))
-                style_fig(fig, height=300)
-                fig.update_layout(barmode="stack", bargap=0.3, showlegend=False, margin=dict(l=10, r=10, t=10, b=10))
-                chart_key([(t.name, t.marker.color) for t in fig.data])
-                fig.update_xaxes(showticklabels=False, showgrid=False)
-                fig.update_yaxes(autorange="reversed")
-                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+                labels = indicators.set_index("indicator_code").label_fr
+                sector_names = [labels[c].removesuffix(" (valeur ajoutée)") for c in sectors]
+                parts = pd.DataFrame([
+                    {"label": names[iso], "series": name, "value": v, "text": f"{v:.0f} %"}
+                    for code, name in zip(sectors, sector_names)
+                    for iso, v in latest_of(code).reindex(order).items() if pd.notna(v)
+                ])
+                chart_key(list(zip(sector_names, (SECTOR_COLORS[c] for c in sectors))))
+                show_chart(charts.stacked_hbars(parts, order=[names[i] for i in order], series=sector_names,
+                                                colors=[SECTOR_COLORS[c] for c in sectors],
+                                                value_title="Part du PIB", inside_text=True),
+                           "Part de l'agriculture, de l'industrie et des services dans le PIB de chaque pays.")
                 st.caption("Le reste du PIB correspond aux impôts nets sur les produits. Un poids élevé de "
                            "l'agriculture signale à la fois une dépendance et des besoins de transformation "
                            "(agro-industrie, logistique, stockage).")
@@ -824,38 +798,30 @@ def page_invest() -> None:
         if not stability.empty:
             with s1.container(border=True):
                 st.markdown(f"**Croissance et régularité** · {vol_years[0] + 1}-{last_year}")
-                fig = go.Figure()
-                for iso, r in stability.iterrows():
-                    focus = iso == FOCUS
-                    fig.add_trace(go.Scatter(
-                        x=[r.growth_sd], y=[r.growth_mean], mode="markers+text", name=names[iso],
-                        text=[f"<b>{names[iso]}</b>" if focus else names[iso]],
-                        textposition="middle right" if focus else "top center",
-                        marker=dict(size=18 if focus else 12, color=COLORS[iso], line=dict(width=2, color="white")),
-                        hovertemplate=f"{names[iso]}<br>croissance moyenne : %{{y:.1f}} %<br>"
-                                      "écart-type : %{x:.1f} pts<extra></extra>",
-                        showlegend=False,
-                    ))
-                style_fig(fig, height=360)
-                fig.update_xaxes(title="Irrégularité (écart-type, points) →")
-                fig.update_yaxes(title="Croissance moyenne (%) →")
-                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+                points = pd.DataFrame({
+                    "x": stability.growth_sd, "y": stability.growth_mean,
+                    "country": [names[i] for i in stability.index],
+                    "color": [COLORS[i] for i in stability.index], "shape": [SHAPES[i] for i in stability.index],
+                    "size": [260 if i == FOCUS else 120 for i in stability.index],
+                    "bold": [700 if i == FOCUS else 400 for i in stability.index],
+                    "tip_x": [f"{v:.1f} pts" for v in stability.growth_sd],
+                    "tip_y": [f"{v:.1f} %" for v in stability.growth_mean],
+                })
+                show_chart(charts.labeled_scatter(points, x_title="Irrégularité (écart-type, points) →",
+                                                  y_title="Croissance moyenne (%) →"),
+                           "Croissance moyenne et irrégularité de la croissance de chaque pays sur 10 ans.")
                 st.caption("En haut à gauche : croissance forte et régulière. En bas à droite : faible et heurtée.")
             with s2.container(border=True):
                 st.markdown(f"**Inflation moyenne** · {vol_years[0] + 1}-{last_year}")
                 inf = stability.infl_mean.sort_values(ascending=False)
-                fig = go.Figure(go.Bar(
-                    x=inf.values, y=[names[i] for i in inf.index], orientation="h",
-                    marker=dict(color=[COLORS[i] for i in inf.index], cornerradius=4),
-                    customdata=stability.infl_sd.reindex(inf.index).values,
-                    text=[f"{v:.1f} %" for v in inf.values], textposition="outside", cliponaxis=False,
-                    hovertemplate="%{y} : %{x:.1f} % par an en moyenne<br>écart-type : %{customdata:.1f} pts"
-                                  "<extra></extra>",
-                ))
-                style_fig(fig, height=360)
-                fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=60, t=10, b=10))
-                fig.update_xaxes(showticklabels=False, showgrid=False)
-                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+                bars = pd.DataFrame({
+                    "label": [names[i] for i in inf.index], "value": inf.values,
+                    "color": [COLORS[i] for i in inf.index],
+                    "text": [f"{v:.1f} %" for v in inf.values],
+                })
+                # Inflation : la plus basse en haut
+                show_chart(charts.hbars(bars, value_title="Inflation moyenne par an", ascending=True),
+                           "Inflation annuelle moyenne de chaque pays sur 10 ans, de la plus basse à la plus haute.")
                 infl_sd = stability.infl_sd
                 st.caption(f"Variabilité d'une année à l'autre (écart-type) : {infl_sd.get(FOCUS):.1f} pts au "
                            f"{focus_name}, de {infl_sd.min():.1f} à {infl_sd.max():.1f} pts chez les 7 pays. "
@@ -866,25 +832,23 @@ def page_invest() -> None:
                 st.markdown(f"**Valeur de la monnaie face au dollar** · base 100 en {fx_base}")
                 uemoa = countries.loc[countries.is_uemoa, "country_iso3"].tolist()
                 others = [i for i in fx.columns if i not in uemoa]
-                fig = go.Figure()
                 lines = [(FOCUS, "Franc CFA (XOF) — " + ", ".join(names[i] for i in sorted(uemoa, key=lambda i: i != FOCUS)))]
                 lines += [(i, f"Monnaie de {names[i]}" if i != "NGA" else "Naira (NGN) — Nigeria") for i in others]
+                curves, key = [], []
                 for iso, label in lines:
                     s = fx[iso].dropna()
                     if fx_base not in s.index:
                         continue
                     idx = s.loc[fx_base] / s * 100
-                    fig.add_trace(go.Scatter(
-                        x=idx.index, y=idx.values, name=label, mode="lines",
-                        line=dict(color=COLORS[iso], width=4 if iso == FOCUS else 2.5),
-                        hovertemplate=f"{label.split(' — ')[0]} · %{{x}} : %{{y:.0f}}<extra></extra>",
-                    ))
-                fig.add_hline(y=100, line=dict(color=NEUTRAL, dash="dot", width=1))
-                style_fig(fig, height=300)
-                fig.update_layout(showlegend=False, hovermode="x unified")
-                fig.update_yaxes(title=None, ticksuffix="")
-                chart_key([(t.name, t.line.color) for t in fig.data])
-                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+                    short = label.split(" — ")[0]
+                    curves.append(pd.DataFrame({"x": idx.index, "y": idx.values, "series": short,
+                                                "color": COLORS[iso], "weight": 4 if iso == FOCUS else 2,
+                                                "text": [f"{v:.0f}" for v in idx.values]}))
+                    key.append((label, COLORS[iso]))
+                chart_key(key)
+                show_chart(charts.lines(pd.concat(curves), value_title=f"Base 100 en {fx_base}", rule_y=100,
+                                        end_labels=True),
+                           f"Valeur des monnaies face au dollar, base 100 en {fx_base}.")
                 ngn = fx.get("NGA")
                 if ngn is not None and fx_base in ngn.dropna().index:
                     loss = 1 - ngn.dropna().loc[fx_base] / ngn.dropna().iloc[-1]
@@ -912,16 +876,11 @@ def page_invest() -> None:
             hist = series_of(pick)
             window_start = hist.index.max() - 4 if len(hist) else None
             avg = hist.loc[window_start:].mean().sort_values() if window_start is not None else pd.Series(dtype=float)
-            fig = go.Figure(go.Bar(
-                x=avg.values, y=[names[i] for i in avg.index], orientation="h",
-                marker=dict(color=[COLORS[i] for i in avg.index], cornerradius=4),
-                text=[fmt(v, unit) for v in avg.values], textposition="outside", cliponaxis=False,
-                hovertemplate="%{y} : %{x:,.1f}<extra></extra>",
-            ))
-            style_fig(fig, height=320)
-            fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=90, t=10, b=10))
-            fig.update_xaxes(showticklabels=False, showgrid=False)
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            bars = pd.DataFrame({"label": [names[i] for i in avg.index], "value": avg.values,
+                                 "color": [COLORS[i] for i in avg.index],
+                                 "text": [fmt(v, unit) for v in avg.values]})
+            show_chart(charts.hbars(bars, value_title=f"Moyenne sur 5 ans ({unit})", right=90),
+                       f"{climate_labels[pick]} : moyenne sur 5 ans pour les 7 pays.")
             st.caption(f"Moyenne {int(window_start)}-{int(hist.index.max())} ({unit}), pour lisser les à-coups "
                        "d'une année sur l'autre. IDE : investissements directs étrangers. Crédit au secteur privé : "
                        "prêts des banques aux entreprises et aux ménages.")
@@ -980,53 +939,23 @@ def page_compare() -> None:
         left, right = st.columns([3, 2])
         with left.container(border=True):
             st.markdown(f"**Évolution** · {unit}")
-            fig = go.Figure()
-            ends = []
-            for (name, iso, focus), g in series.groupby(["country_name_fr", "country_iso3", "is_focus"]):
-                fig.add_trace(go.Scatter(
-                    x=g.year, y=g.value, name=name, mode="lines+markers" if focus else "lines",
-                    line=dict(color=COLORS[iso], width=4 if focus else 2),
-                    marker=dict(size=6), legendrank=1 if focus else 10,
-                    hovertemplate=f"{name} : %{{y:,.1f}} {unit}<extra></extra>",
-                ))
-                ends.append((g.year.iloc[-1], g.value.iloc[-1], name, iso, focus))
-            # Bénin dessiné en dernier, donc au premier plan
-            fig.data = tuple(sorted(fig.data, key=lambda t: t.line.width))
-            # Nom du pays au bout de sa courbe, en écartant les étiquettes trop proches
-            span = (series.value.max() - series.value.min()) or 1
-            gap, prev = span * 0.055, None
-            for x, y, name, iso, focus in sorted(ends, key=lambda e: e[1]):
-                y_label = y if prev is None else max(y, prev + gap)
-                prev = y_label
-                fig.add_annotation(
-                    x=x, y=y_label, text=f"<b>{name}</b>" if focus else name,
-                    xanchor="left", xshift=8, showarrow=False, font=dict(size=12),
-                )
-                fig.add_shape(type="line", x0=x, y0=y, x1=x, y1=y_label, xref="x", yref="y",
-                              line=dict(color=COLORS[iso], width=1))
-            style_fig(fig, height=440)
-            # Pas de légende : chaque courbe porte son nom. Axe borné aux années des données :
-            # sinon Plotly l'étire pour loger ces noms (jusqu'à 2040 sur un téléphone).
-            fig.update_layout(showlegend=False, hovermode="x unified", margin=dict(l=10, r=110, t=20, b=10))
-            fig.update_xaxes(range=[series.year.min() - 0.5, series.year.max() + 0.5])
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            curves = pd.DataFrame({
+                "x": series.year, "y": series.value, "series": series.country_name_fr,
+                "color": series.country_iso3.map(COLORS), "weight": series.is_focus.map({True: 4, False: 2}),
+                "text": [fmt(v, unit) for v in series.value],
+            })
+            show_chart(charts.lines(curves, value_title=unit, end_labels=True, height=420),
+                       f"{choice} : évolution pour le {focus_name} et les pays choisis.")
 
         with right.container(border=True):
             st.markdown("**Dernière valeur publiée**")
             last = (series.sort_values("year").groupby("country_name_fr", as_index=False).last()
                     .sort_values("value"))
-            fig = go.Figure(go.Bar(
-                x=last.value, y=last.country_name_fr, orientation="h",
-                marker=dict(color=[COLORS[iso] for iso in last.country_iso3], cornerradius=4),
-                text=[f"{fmt(v, unit)} ({int(y)})" for v, y in zip(last.value, last.year)],
-                # Texte à l'extérieur, à l'encre normale : lisible quelle que soit la couleur de la barre
-                textposition="outside", cliponaxis=False,
-                hovertemplate="%{y} : %{x:,.1f}<extra></extra>",
-            ))
-            style_fig(fig, height=440)
-            fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=90, t=20, b=10))
-            fig.update_xaxes(showticklabels=False, showgrid=False)
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            bars = pd.DataFrame({"label": last.country_name_fr, "value": last.value,
+                                 "color": last.country_iso3.map(COLORS),
+                                 "text": [f"{fmt(v, unit)} ({int(y)})" for v, y in zip(last.value, last.year)]})
+            show_chart(charts.hbars(bars, value_title="Dernière valeur", right=100),
+                       f"{choice} : dernière valeur publiée par pays.")
 
         notes = [f"Le {focus_name} est en vert ; chaque voisin garde la même couleur sur tous les graphiques."]
         if pd.notna(meta.higher_is_better):
@@ -1089,20 +1018,16 @@ def page_odfa() -> None:
                       "date inconnue": "#E3E5DF"}
         with st.container(border=True):
             st.markdown("**Par producteur** · nombre de jeux selon l'année de dernière mise à jour")
-            fig = go.Figure()
-            for period in [c for c in ages.columns if c != "total"]:
-                fig.add_trace(go.Bar(
-                    y=ages.index, x=ages[period], name=period, orientation="h",
-                    marker=dict(color=age_colors[period], line=dict(width=1, color="white")),
-                    text=[str(v) if v else "" for v in ages[period]], textposition="inside",
-                    insidetextanchor="middle", hovertemplate=f"%{{y}} · {period} : %{{x}} jeux<extra></extra>",
-                ))
-            style_fig(fig, height=80 + 45 * len(ages))
-            fig.update_layout(barmode="stack", bargap=0.3, showlegend=False, margin=dict(l=10, r=10, t=10, b=10))
-            chart_key([(t.name, t.marker.color) for t in fig.data])
-            fig.update_xaxes(showticklabels=False, showgrid=False)
-            fig.update_yaxes(autorange="reversed")
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            periods_shown = [c for c in ages.columns if c != "total"]
+            parts = ages[periods_shown].reset_index(names="label").melt("label", var_name="series")
+            parts = parts[parts.value > 0].assign(text=lambda d: d.value.astype(int).astype(str))
+            chart_key([(p, age_colors[p]) for p in periods_shown])
+            show_chart(charts.stacked_hbars(parts, order=ages.index.tolist(), series=periods_shown,
+                                            colors=[age_colors[p] for p in periods_shown],
+                                            value_title="Jeux", inside_text=True, right=50,
+                                            totals=pd.DataFrame({"label": ages.index, "value": ages.total,
+                                                                 "text": ages.total.astype(int).astype(str)})),
+                       "Nombre de jeux de données par famille de producteur, selon l'année de dernière mise à jour.")
             st.caption("Producteurs regroupés en familles (INStaD et ex-INSAE, ministères, agences publiques, "
                        "organismes internationaux). Date de mise à jour déclarée par le portail : elle peut être "
                        "postérieure à la période couverte par les données.")
@@ -1118,30 +1043,17 @@ def page_odfa() -> None:
         with g1.container(border=True):
             st.markdown("**Jeux par thème** · estimé d'après le titre et le producteur")
             by_theme = odfa.theme.value_counts().sort_values()
-            fig = go.Figure(go.Bar(
-                x=by_theme.values, y=by_theme.index, orientation="h",
-                marker=dict(color=FOCUS_COLOR, cornerradius=4),
-                text=by_theme.values, textposition="outside", cliponaxis=False,
-                hovertemplate="%{y} : %{x} jeux<extra></extra>",
-            ))
-            style_fig(fig, height=60 + 30 * len(by_theme))
-            fig.update_layout(showlegend=False, bargap=0.3, margin=dict(l=10, r=40, t=10, b=10))
-            fig.update_xaxes(showticklabels=False, showgrid=False)
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            bars = pd.DataFrame({"label": by_theme.index, "value": by_theme.values, "color": FOCUS_COLOR,
+                                 "text": by_theme.values.astype(str)})
+            show_chart(charts.hbars(bars, value_title="Jeux", label_title="Thème", right=40),
+                       "Nombre de jeux de données Open Data for Africa par thème estimé.")
         with g2.container(border=True):
             st.markdown("**Année de dernière mise à jour**")
             by_year = odfa.last_updated_on.dt.year.value_counts().sort_index()
-            fig = go.Figure(go.Bar(
-                x=by_year.index.astype(str), y=by_year.values,
-                marker=dict(color=FOCUS_COLOR, cornerradius=4),
-                text=by_year.values, textposition="outside", cliponaxis=False,
-                hovertemplate="%{x} : %{y} jeux<extra></extra>",
-            ))
-            style_fig(fig, height=60 + 30 * len(by_theme))
-            fig.update_layout(showlegend=False, bargap=0.3, margin=dict(l=10, r=10, t=30, b=10))
-            fig.update_yaxes(showticklabels=False, showgrid=False)
-            fig.update_xaxes(type="category")
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            bars = pd.DataFrame({"label": by_year.index.astype(str), "value": by_year.values,
+                                 "text": by_year.values.astype(str)})
+            show_chart(charts.vbars(bars, value_title="Jeux", label_title="Année", color=FOCUS_COLOR, height=300),
+                       "Nombre de jeux de données selon l'année de leur dernière mise à jour.")
             oldest = by_year.idxmax()
             st.caption(f"{by_year.max()} jeux ont été mis à jour pour la dernière fois en {oldest} : "
                        "de bons candidats à une actualisation.")
@@ -1261,11 +1173,11 @@ def page_catalog() -> None:
         with st.container(border=True):
             st.markdown("**Occurrences par année d'observation** · depuis 1990")
             recent = occ[occ.year >= 1990]
-            fig = go.Figure(go.Bar(x=recent.year, y=recent.value, marker=dict(color=FOCUS_COLOR, cornerradius=3),
-                                   hovertemplate="%{x} : %{y:,} occurrences<extra></extra>"))
-            style_fig(fig, height=260)
-            fig.update_layout(showlegend=False, bargap=0.2)
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            bars = pd.DataFrame({"label": recent.year.astype(int).astype(str), "value": recent.value,
+                                 "text": [f"{int(v):,}".replace(",", "\u202f") for v in recent.value]})
+            show_chart(charts.vbars(bars, value_title="Occurrences", label_title="Année", color=FOCUS_COLOR,
+                                    every=10, show_text=False),
+                       "Occurrences d'espèces observées au Bénin par année d'observation, depuis 1990.")
             st.caption("Source : [GBIF](https://www.gbif.org/country/BJ/summary), API publique ; licence propre "
                        "à chaque jeu (CC0, CC BY, CC BY-NC). Agrégats seulement : les occurrences ne sont pas copiées.")
 
@@ -1370,33 +1282,24 @@ def page_access() -> None:
         d1, d2 = st.columns([2, 3])
         with d1.container(border=True):
             st.markdown(f"**Score global {last_edition}** · sur 100")
-            fig = go.Figure(go.Bar(
-                x=current.overall_score, y=current.country_name_fr, orientation="h",
-                marker=dict(color=[COLORS[i] for i in current.country_iso3], cornerradius=4),
-                text=[f"{v:.1f}" for v in current.overall_score], textposition="outside", cliponaxis=False,
-                hovertemplate="%{y} : %{x:.1f} / 100<extra></extra>",
-            ))
-            style_fig(fig, height=320)
-            fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=50, t=10, b=10))
-            fig.update_xaxes(showticklabels=False, showgrid=False, range=[0, 100])
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            bars = pd.DataFrame({"label": current.country_name_fr, "value": current.overall_score,
+                                 "color": current.country_iso3.map(COLORS),
+                                 "text": [f"{v:.1f}" for v in current.overall_score]})
+            show_chart(charts.hbars(bars, value_title="Score sur 100", x_max=100, right=40),
+                       f"Score global ODIN {last_edition} des 7 pays, sur 100.")
         with d2.container(border=True):
             st.markdown("**Évolution du score global** · éditions ODIN")
-            fig = go.Figure()
-            for (iso, name), g in odin_scores.groupby(["country_iso3", "country_name_fr"]):
-                focus = iso == FOCUS
-                fig.add_trace(go.Scatter(
-                    x=g.edition_year, y=g.overall_score, name=name, mode="lines+markers",
-                    line=dict(color=COLORS[iso], width=4 if focus else 2), legendrank=1 if focus else 10,
-                    hovertemplate=f"{name} · %{{x}} : %{{y:.1f}}<extra></extra>",
-                ))
-            fig.data = tuple(sorted(fig.data, key=lambda t: t.line.width))
-            style_fig(fig, height=300)
-            fig.update_layout(showlegend=False, hovermode="x unified")
-            fig.update_xaxes(tickvals=sorted(odin_scores.edition_year.unique()))
-            country_key(odin_scores.country_iso3)
-            fig.update_yaxes(range=[0, 100])
-            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
+            curves = pd.DataFrame({
+                "x": odin_scores.edition_year, "y": odin_scores.overall_score,
+                "series": odin_scores.country_name_fr, "color": odin_scores.country_iso3.map(COLORS),
+                "shape": odin_scores.country_iso3.map(SHAPES),
+                "weight": (odin_scores.country_iso3 == FOCUS).map({True: 4, False: 2}),
+                "text": [f"{v:.1f}" for v in odin_scores.overall_score],
+            })
+            country_key(odin_scores.country_iso3, shapes=True)
+            show_chart(charts.lines(curves, value_title="Score sur 100", y_domain=(0, 100), shapes=True,
+                                    x_ticks=sorted(int(y) for y in odin_scores.edition_year.unique())),
+                       "Évolution du score global ODIN des 7 pays, édition par édition.")
         st.caption("Source : [Open Data Watch, Open Data Inventory](https://odin.opendatawatch.com/), licence "
                    "CC BY 4.0. La méthodologie a changé entre éditions : les évolutions sont indicatives.")
 
