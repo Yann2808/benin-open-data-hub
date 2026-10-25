@@ -30,7 +30,7 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 - `transform/` (dbt-duckdb) : staging (vues) → marts (tables) : dim_country, dim_indicator,
   fct_indicator_values (avec `collection_status` collectée/démo), mart_latest_values, mart_benin_scorecard,
   mart_data_catalog (types : indicateur, enquête, fichier déposé, jeu de données, source référencée), mart_odfa_datasets,
-  mart_source_availability, mart_odin_scores, mart_gbif_yearly. 51 tests dbt, 52 tests pytest (dont un test de fumée
+  mart_source_availability, mart_odin_scores, mart_gbif_yearly. 51 tests dbt, 53 tests pytest (dont deux tests
   de l'app avec `AppTest`).
 - `app/streamlit_app.py` : 8 pages `st.navigation` (menu en haut, replié dans un menu latéral sur téléphone ; adresses `/fiche-pays`, `/investir`, etc.) : Tableau de bord, Fiche pays, Investir au Bénin, Comparer, Open Data for Africa,
   Catalogue, Accès aux données, Méthode. Une fonction `page_*` par page, routeur en fin de fichier ; le test de fumée les ouvre toutes. Définition, unité, année et source à côté de chaque chiffre (`definition_md`,
@@ -50,7 +50,8 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   Mobile : graphiques via `style_fig` + `config=CHART_CONFIG` (ni barre d'outils ni zoom), légendes en HTML
   avec `chart_key` / `country_key` (la légende Plotly s'empile en colonne sur téléphone), chiffres clés dans
   `kpi_row` (2 par ligne sous 640 px), `st.pills` plutôt que `multiselect` pour les petites listes.
-  Vérifier en 390 px de large avant de merger.
+  Parcours : `PAGE_ORDER` / `PAGE_BY_TITLE` (routeur) servent aux raccourcis de l'accueil et au lien « Page suivante » ;
+  `theme_filter` (pastilles par thème) au-dessus des cartes `indicator_cards`. Vérifier en 390 px de large avant de merger.
 - `.github/workflows/refresh.yml` : tests à chaque push et PR ; collecte réelle chaque lundi 05:17 UTC
   (ou `workflow_dispatch`), dbt build, export Parquet commité sur `main` par `github-actions[bot]`.
 - `.devcontainer/` : config Codespaces générée par Streamlit Cloud (lance l'app sur le port 8501).
