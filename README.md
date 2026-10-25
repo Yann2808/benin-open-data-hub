@@ -63,7 +63,7 @@ Prototype expérimental (non branché sur `make run`) : `python -m ingestion.arc
 
 ## Ajouter des données
 
-- **Un indicateur ou un pays de comparaison** : `config/sources.yml`, aucune modification de code. Le champ `section` choisit l'onglet : tableau de bord (défaut) ou `investir`.
+- **Un indicateur ou un pays de comparaison** : `config/sources.yml`, aucune modification de code. Le champ `section` choisit la page : tableau de bord (défaut) ou `investir`.
 - **Un fichier de data.gouv.bj** : voir `data/manual/README.md`. Le portail n'autorise pas la collecte automatisée, donc le dépôt est manuel, avec URL et date de téléchargement tracées.
 - **Une source seulement référencée** (sans collecte) : `catalog_sources` dans `config/sources.yml`, et une entrée `source_health` pour le baromètre.
 - **Proposer une source** : [formulaire d'issue](https://github.com/Yann2808/benin-open-data-hub/issues/new?template=proposer-une-source.yml).
