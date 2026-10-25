@@ -47,6 +47,10 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   données jusqu'à 1 h (redéployer le code ne vide pas ce cache). Pour forcer : « Reboot app » sur share.streamlit.io.
   Thème dans `.streamlit/config.toml` (vert Bénin `#0F7B4B`, Inter / Space Grotesk, clair imposé).
   Couleurs des pays attribuées par code ISO, jamais par rang : le Bénin en vert, chaque voisin sa couleur.
+  Mobile : graphiques via `style_fig` + `config=CHART_CONFIG` (ni barre d'outils ni zoom), légendes en HTML
+  avec `chart_key` / `country_key` (la légende Plotly s'empile en colonne sur téléphone), chiffres clés dans
+  `kpi_row` (2 par ligne sous 640 px), `st.pills` plutôt que `multiselect` pour les petites listes.
+  Vérifier en 390 px de large avant de merger.
 - `.github/workflows/refresh.yml` : tests à chaque push et PR ; collecte réelle chaque lundi 05:17 UTC
   (ou `workflow_dispatch`), dbt build, export Parquet commité sur `main` par `github-actions[bot]`.
 - `.devcontainer/` : config Codespaces générée par Streamlit Cloud (lance l'app sur le port 8501).
