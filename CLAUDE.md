@@ -30,7 +30,7 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 - `transform/` (dbt-duckdb) : staging (vues) → marts (tables) : dim_country, dim_indicator,
   fct_indicator_values (avec `collection_status` collectée/démo), mart_latest_values, mart_benin_scorecard,
   mart_data_catalog (types : indicateur, enquête, fichier déposé, jeu de données, source référencée), mart_odfa_datasets,
-  mart_source_availability, mart_odin_scores, mart_gbif_yearly. 51 tests dbt, 53 tests pytest (dont deux tests
+  mart_source_availability, mart_odin_scores, mart_gbif_yearly. 51 tests dbt, 60 tests pytest (dont deux tests
   de l'app avec `AppTest`).
 - `app/streamlit_app.py` : 8 pages `st.navigation` (menu en haut, replié dans un menu latéral sur téléphone ; adresses `/fiche-pays`, `/investir`, etc.) : Tableau de bord, Fiche pays, Investir au Bénin, Comparer, Open Data for Africa,
   Catalogue, Accès aux données, Méthode. Une fonction `page_*` par page, routeur en fin de fichier ; le test de fumée les ouvre toutes. Définition, unité, année et source à côté de chaque chiffre (`definition_md`,
@@ -47,9 +47,14 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   données jusqu'à 1 h (redéployer le code ne vide pas ce cache). Pour forcer : « Reboot app » sur share.streamlit.io.
   Thème dans `.streamlit/config.toml` (vert Bénin `#0F7B4B`, Inter / Space Grotesk, clair imposé).
   Couleurs des pays attribuées par code ISO, jamais par rang : le Bénin en vert, chaque voisin sa couleur.
-  Mobile : graphiques via `style_fig` + `config=CHART_CONFIG` (ni barre d'outils ni zoom), légendes en HTML
-  avec `chart_key` / `country_key` (la légende Plotly s'empile en colonne sur téléphone), chiffres clés dans
-  `kpi_row` (2 par ligne sous 640 px), `st.pills` plutôt que `multiselect` pour les petites listes.
+  Graphiques : **Altair** via `app/charts.py` (`hbars`, `vbars`, `stacked_hbars`, `lines`, `position_strip`,
+  `labeled_scatter`) et `show_chart(chart, description)`. Pas de Plotly : 4,6 Mo de JS, premier graphique
+  20 s plus tard sur un Android d'entrée de gamme simulé (mesure du 2026-10-25). Un seul graphique Plotly
+  suffirait à recharger tout le moteur. Au toucher, la valeur s'écrit en haut du graphique (Vega n'affiche
+  ses infobulles qu'à la souris). Accessibilité : forme par pays (`SHAPES`), textes ≥ 12 px, contraste
+  ≥ 4,5 (`charts.contrast`, testé), description `alt` sur chaque graphique.
+  Mobile : légendes en HTML avec `chart_key` / `country_key`, chiffres clés dans `kpi_row` (2 par ligne
+  sous 640 px), `st.pills` plutôt que `multiselect` pour les petites listes.
   Parcours : `PAGE_ORDER` / `PAGE_BY_TITLE` (routeur) servent aux raccourcis de l'accueil et au lien « Page suivante » ;
   `theme_filter` (pastilles par thème) au-dessus des cartes `indicator_cards`. Vérifier en 390 px de large avant de merger.
 - `.github/workflows/refresh.yml` : tests à chaque push et PR ; collecte réelle chaque lundi 05:17 UTC
