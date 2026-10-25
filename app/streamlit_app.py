@@ -71,6 +71,9 @@ st.html(
 .bodh-list .val { color: #5B6169; font-size: .9rem; white-space: nowrap; }
 .bodh-list .rank { font-weight: 600; color: #1F2328; }
 .bodh-title-page { font-size: 2rem; }
+/* Raccourcis de l'accueil et « Page suivante » : liens en forme de bouton, repérables sans le menu. */
+.st-key-shortcuts a, .st-key-next-page a { border: 1px solid #CFE3D6; background: #EEF6F1; border-radius: 999px; padding: .2rem .9rem; }
+.st-key-shortcuts a:hover, .st-key-next-page a:hover { background: #E1EFE6; }
 /* Légende des graphiques (chart_key) : pastilles qui passent à la ligne. */
 .bodh-key { display: flex; flex-wrap: wrap; gap: .2rem .9rem; font-size: .85rem; color: #5B6169; margin: .25rem 0 0 0; }
 .bodh-key span { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
@@ -166,6 +169,11 @@ def ordinal(rank: int) -> str:
     return "1er" if rank == 1 else f"{rank}e"
 
 
+def lower_first(text: str) -> str:
+    """Minuscule initiale pour un libellé cité dans une phrase, sauf sigle (« PIB », « IDE »)."""
+    return text if text[:2].isupper() else text[:1].lower() + text[1:]
+
+
 def share(part: int, total: int) -> str:
     """Part en % à la française, sans afficher « 0 % » pour une part non nulle."""
     ratio = part / total if total else 0
@@ -229,6 +237,17 @@ def rank_list(rows: pd.DataFrame) -> str:
         for r in rows.itertuples()
     )
     return f'<ul class="bodh-list">{items}</ul>'
+
+
+def theme_filter(rows: pd.DataFrame, key: str) -> pd.DataFrame:
+    """Pastilles « Tous / thème » au-dessus des cartes : sur téléphone, toutes les cartes
+    empilées faisaient une page interminable."""
+    present = [t for t in THEMES if t in set(rows.theme)]
+    if len(present) < 2:
+        return rows
+    choice = st.pills("Thème", ["Tous", *present], default="Tous", key=key, label_visibility="collapsed",
+                      format_func=lambda t: t if t == "Tous" else f"{THEMES[t]} {t}")
+    return rows if choice in (None, "Tous") else rows[rows.theme == choice]
 
 
 def indicator_cards(rows: pd.DataFrame, history: pd.DataFrame, median_label: str) -> None:
@@ -482,6 +501,23 @@ def page_dashboard() -> None:
     better = (scorecard.position_vs_peers == "mieux que la médiane des pairs").sum()
     worse = (scorecard.position_vs_peers == "moins bien que la médiane des pairs").sum()
     firsts = (ranked.rank_among_peers == 1).sum()
+    by_rank = ranked.sort_values(["rank_among_peers", "label_fr"])
+
+    # En bref : la lecture des chiffres en une phrase, avant les chiffres eux-mêmes
+    if len(by_rank):
+        best, worst = by_rank.iloc[0], by_rank.iloc[-1]
+        st.markdown(
+            f"**En bref.** Le {focus_name} fait mieux que la médiane de ses voisins sur **{better} indicateur"
+            f"{'s' if better > 1 else ''} sur {len(ranked)}**. Point fort : {lower_first(best.label_fr)} "
+            f"({ordinal(int(best.rank_among_peers))} sur {int(best.n_countries_compared)}). À surveiller : "
+            f"{lower_first(worst.label_fr)} ({ordinal(int(worst.rank_among_peers))} sur "
+            f"{int(worst.n_countries_compared)})."
+        )
+    # Raccourcis vers les pages d'analyse : sur téléphone, le menu est replié
+    with st.container(horizontal=True, key="shortcuts"):
+        for title in ("Fiche pays", "Investir au Bénin", "Comparer"):
+            page = PAGE_BY_TITLE[title]
+            st.page_link(page, label=title, icon=page.icon)
 
     st.space("small")
     kpis = kpi_row("dashboard")
@@ -491,7 +527,6 @@ def page_dashboard() -> None:
     kpis.metric(f"Indicateurs où le {focus_name} est 1er", f"{firsts}", border=True)
 
     # Points forts / à surveiller : les 3 meilleurs et les 3 moins bons rangs
-    by_rank = ranked.sort_values(["rank_among_peers", "label_fr"])
     s1, s2 = st.columns(2)
     with s1.container(border=True):
         st.markdown(":material/trending_up: **Points forts**")
@@ -553,10 +588,8 @@ def page_dashboard() -> None:
     # courbe du Bénin. Grille continue pour ne pas laisser de trous.
     st.space("small")
     st.subheader("Détail par indicateur")
-    st.caption("Dernière valeur, évolution sur 5 ans, rang parmi les 7 pays et courbe du Bénin depuis 2000. "
-               "Icônes : " + " · ".join(f"{icon} {name}" for name, icon in THEMES.items()
-                                        if name in set(scorecard.theme)) + ".")
-    indicator_cards(scorecard, focus_series, "médiane des voisins")
+    st.caption("Dernière valeur, évolution sur 5 ans, rang parmi les 7 pays et courbe du Bénin depuis 2000.")
+    indicator_cards(theme_filter(scorecard, "theme_dashboard"), focus_series, "médiane des voisins")
 
 # --- Fiche pays --------------------------------------------------------------
 def page_country() -> None:
@@ -638,7 +671,7 @@ def page_country() -> None:
     st.subheader("Détail par indicateur")
     st.caption(f"{names[iso]} : dernière valeur, évolution sur 5 ans, rang parmi les {len(countries)} pays "
                "et courbe depuis 2000.")
-    indicator_cards(profile, country_series, "médiane des autres pays")
+    indicator_cards(theme_filter(profile, "theme_country"), country_series, "médiane des autres pays")
 
 # --- Investir au Bénin ---------------------------------------------------------
 def page_invest() -> None:
@@ -1178,18 +1211,20 @@ def page_catalog() -> None:
             counts_row.metric((plural if n > 1 else kind).capitalize(), int(n), border=True)
 
     with st.container(border=True):
-        all_kinds = sorted(catalog.kind.unique())
-        kinds = st.pills("Type", all_kinds, selection_mode="multi", default=all_kinds) or []
         search = st.text_input("Rechercher", placeholder="ex. santé, ménages, électricité…",
                                icon=":material/search:")
+        all_kinds = sorted(catalog.kind.unique())
+        kinds = st.pills("Type", all_kinds, selection_mode="multi", default=all_kinds) or []
     view = catalog[catalog.kind.isin(kinds)]
     if search:
         view = view[view.title.str.contains(search, case=False, na=False, regex=False)
                     | view.topic.fillna("").str.contains(search, case=False, regex=False)
                     | view.source.fillna("").str.contains(search, case=False, regex=False)]
-    columns = ["kind", "title", "source", "topic", "period_start", "period_end", "access", "url"]
+    # Titre en premier et large : sur téléphone, c'est ce qu'on voit sans faire glisser le tableau.
+    # Hauteur bornée pour que le tableau ne capture pas tout le défilement de la page.
+    columns = ["title", "kind", "url", "source", "topic", "period_start", "period_end", "access"]
     st.dataframe(
-        view[columns],
+        view[columns], height=400,
         column_config={
             "kind": "Type", "title": st.column_config.TextColumn("Titre", width="large"),
             "source": "Source", "topic": "Thème",
@@ -1450,10 +1485,9 @@ n'invente jamais de valeur : une case vide reste vide. Chaque valeur porte un st
 # --- Navigation --------------------------------------------------------------
 # Pages plutôt qu'onglets : 8 onglets débordaient de l'écran d'un téléphone. Le menu
 # du haut se replie dans un menu latéral sur mobile, et chaque page a son adresse.
-HOME = st.Page(page_dashboard, title="Tableau de bord", icon=":material/dashboard:", default=True)
-navigation = st.navigation({
+PAGES = {
     "": [
-        HOME,
+        st.Page(page_dashboard, title="Tableau de bord", icon=":material/dashboard:", default=True),
         st.Page(page_country, title="Fiche pays", icon=":material/flag:", url_path="fiche-pays"),
         st.Page(page_invest, title="Investir au Bénin", icon=":material/business_center:", url_path="investir"),
         st.Page(page_compare, title="Comparer", icon=":material/compare_arrows:", url_path="comparer"),
@@ -1465,9 +1499,24 @@ navigation = st.navigation({
         st.Page(page_access, title="Accès aux données", icon=":material/network_check:", url_path="acces"),
         st.Page(page_method, title="Méthode", icon=":material/info:", url_path="methode"),
     ],
-}, position="top")
+}
+# Ordre de lecture (menu, raccourcis de l'accueil, lien « Page suivante »), pages par titre
+PAGE_ORDER = [page for group in PAGES.values() for page in group]
+PAGE_BY_TITLE = {page.title: page for page in PAGE_ORDER}
+HOME = PAGE_ORDER[0]
+
+navigation = st.navigation(PAGES, position="top")
 render_header(None if navigation.title == HOME.title else navigation.title)
 navigation.run()
+
+# Fin de page : où aller ensuite, sans chercher le menu (replié sur téléphone)
+position = next(i for i, page in enumerate(PAGE_ORDER) if page.title == navigation.title)
+following = PAGE_ORDER[(position + 1) % len(PAGE_ORDER)]
+st.space("small")
+with st.container(horizontal=True, horizontal_alignment="right", key="next-page"):
+    st.page_link(following, icon=":material/arrow_forward:", icon_position="right",
+                 label=f"Retour au {following.title.lower()}" if following is HOME
+                 else f"Page suivante : {following.title}")
 
 st.divider()
 st.caption(
