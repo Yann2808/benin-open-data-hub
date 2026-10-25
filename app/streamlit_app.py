@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import html
 import os
+import textwrap
 from pathlib import Path
 
 import duckdb
@@ -70,6 +71,10 @@ st.html(
 .bodh-list .val { color: #5B6169; font-size: .9rem; white-space: nowrap; }
 .bodh-list .rank { font-weight: 600; color: #1F2328; }
 .bodh-title-page { font-size: 2rem; }
+/* Légende des graphiques (chart_key) : pastilles qui passent à la ligne. */
+.bodh-key { display: flex; flex-wrap: wrap; gap: .2rem .9rem; font-size: .85rem; color: #5B6169; margin: .25rem 0 0 0; }
+.bodh-key span { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+.bodh-key i { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; }
 /* Téléphone : en-tête plus compact, valeurs des listes autorisées à passer à la ligne. */
 @media (max-width: 640px) {
   [data-testid="stMainBlockContainer"] { padding-top: 3.5rem; padding-left: 1rem; padding-right: 1rem; }
@@ -79,6 +84,11 @@ st.html(
   .bodh-lede { font-size: .95rem; }
   .bodh-list li { flex-wrap: wrap; gap: .25rem .75rem; }
   .bodh-list .val { white-space: normal; }
+  /* Chiffres clés (kpi_row) : deux cartes par ligne, libellés sur plusieurs lignes. */
+  [class*="st-key-kpis-"] > * { flex: 1 1 calc(50% - .5rem) !important; min-width: calc(50% - .5rem) !important; }
+  [class*="st-key-kpis-"] [data-testid="stMetricLabel"] *,
+  [class*="st-key-kpis-"] [data-testid="stMetricDelta"] * { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+  [class*="st-key-kpis-"] [data-testid="stMetricValue"] { font-size: 1.6rem; }
 }
 </style>
 """
@@ -167,16 +177,47 @@ def to_csv(df: pd.DataFrame) -> bytes:
     return df.to_csv(index=False).encode("utf-8-sig")
 
 
+# Graphiques sans barre d'outils ni zoom : sur un écran tactile, elle masquait les données
+# et le doigt déplaçait le graphique au lieu de faire défiler la page.
+CHART_CONFIG = {"displayModeBar": False, "scrollZoom": False}
+
+
 def style_fig(fig: go.Figure, height: int) -> go.Figure:
     fig.update_layout(
         height=height, margin=dict(l=10, r=10, t=30, b=10),
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Inter, sans-serif", color="#1F2328"),
         hoverlabel=dict(font_family="Inter, sans-serif"),
+        dragmode=False,
     )
-    fig.update_xaxes(gridcolor="#E9EBE5", linecolor="#E3E5DF")
-    fig.update_yaxes(gridcolor="#E9EBE5", automargin=True)  # libellés longs jamais coupés
+    fig.update_xaxes(gridcolor="#E9EBE5", linecolor="#E3E5DF", fixedrange=True)
+    fig.update_yaxes(gridcolor="#E9EBE5", automargin=True, fixedrange=True)  # libellés longs jamais coupés
     return fig
+
+
+def chart_key(items: list[tuple[str, str]]) -> None:
+    """Légende d'un graphique en HTML (libellé, couleur), posée au-dessus du tracé. Elle passe
+    à la ligne sur téléphone, alors que la légende Plotly s'y empilait en colonne sur les données."""
+    spans = "".join(f'<span><i style="background:{color}"></i>{html.escape(label)}</span>' for label, color in items)
+    st.html(f'<div class="bodh-key">{spans}</div>')
+
+
+def country_key(isos) -> None:
+    """Légende des pays : le Bénin d'abord, puis l'ordre reçu, couleurs fixes par code ISO."""
+    names = dict(zip(countries.country_iso3, countries.country_name_fr))
+    ordered = sorted(dict.fromkeys(isos), key=lambda iso: iso != FOCUS)
+    chart_key([(names[iso], COLORS[iso]) for iso in ordered])
+
+
+def wrap_label(text: str, width: int = 20) -> str:
+    """Coupe un libellé d'axe trop long sur deux lignes ou plus (lisible sur téléphone)."""
+    return "<br>".join(textwrap.wrap(text, width)) or text
+
+
+def kpi_row(name: str):
+    """Rangée de chiffres clés : côte à côte sur ordinateur, deux par ligne sur
+    téléphone (règle CSS sur .st-key-kpis-*). `name` doit être unique dans la page."""
+    return st.container(horizontal=True, key=f"kpis-{name}")
 
 
 def rank_list(rows: pd.DataFrame) -> str:
@@ -443,11 +484,11 @@ def page_dashboard() -> None:
     firsts = (ranked.rank_among_peers == 1).sum()
 
     st.space("small")
-    k1, k2, k3 = st.columns(3)
-    k1.metric("Mieux que la médiane des voisins", f"{better} / {len(ranked)}", border=True,
+    kpis = kpi_row("dashboard")
+    kpis.metric("Mieux que la médiane des voisins", f"{better} / {len(ranked)}", border=True,
               help="Indicateurs où le sens de lecture est clair (plus = mieux, ou l'inverse).")
-    k2.metric("Moins bien que la médiane", f"{worse} / {len(ranked)}", border=True)
-    k3.metric(f"Indicateurs où le {focus_name} est 1er", f"{firsts}", border=True)
+    kpis.metric("Moins bien que la médiane", f"{worse} / {len(ranked)}", border=True)
+    kpis.metric(f"Indicateurs où le {focus_name} est 1er", f"{firsts}", border=True)
 
     # Points forts / à surveiller : les 3 meilleurs et les 3 moins bons rangs
     by_rank = ranked.sort_values(["rank_among_peers", "label_fr"])
@@ -465,7 +506,8 @@ def page_dashboard() -> None:
     st.subheader(f"Où se situe le {focus_name} ?")
     st.caption(
         "Sur chaque ligne, les pays sont placés du moins bien classé (à gauche) au mieux classé "
-        f"(à droite), parmi ceux qui ont une donnée de moins de {WINDOW} ans. Survolez un point pour voir la valeur."
+        f"(à droite), parmi ceux qui ont une donnée de moins de {WINDOW} ans. "
+        "Touchez ou survolez un point pour voir la valeur."
     )
     max_year = latest.groupby("indicator_code").latest_year.transform("max")
     comparable = latest[latest.latest_year >= max_year - WINDOW].merge(
@@ -481,28 +523,31 @@ def page_dashboard() -> None:
         score = ((comparable.latest_value - comparable["min"]) / spread * 100).fillna(50).astype(float)
         comparable["score"] = score.where(comparable.higher_is_better.astype(bool), 100 - score)
         # Tri : indicateurs où le Bénin est le mieux classé en haut
-        order = ranked.sort_values("rank_among_peers", ascending=False).label_fr.tolist()
+        order = [wrap_label(t) for t in ranked.sort_values("rank_among_peers", ascending=False).label_fr]
+        comparable["axis_label"] = comparable.label_fr.map(wrap_label)
         comparable["value_txt"] = [fmt(v, u) for v, u in zip(comparable.latest_value, comparable.unit_fr)]
 
         fig = go.Figure()
         # Bénin en premier dans la légende
         for (is_focus, name, iso), g in comparable.groupby(["is_focus", "country_name_fr", "country_iso3"]):
             fig.add_trace(go.Scatter(
-                x=g.score, y=g.label_fr, mode="markers",
+                x=g.score, y=g.axis_label, mode="markers",
                 name=name, legendrank=1 if is_focus else 10,
                 marker=dict(size=16 if is_focus else 10, color=COLORS[iso], line=dict(width=2, color="white")),
-                customdata=g[["country_name_fr", "value_txt", "latest_year"]],
-                hovertemplate="<b>%{customdata[0]}</b><br>%{y} : %{customdata[1]} (%{customdata[2]})<extra></extra>",
+                customdata=g[["country_name_fr", "value_txt", "latest_year", "label_fr"]],
+                hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[3]} : %{customdata[1]} (%{customdata[2]})"
+                              "<extra></extra>",
             ))
         fig.data = tuple(sorted(fig.data, key=lambda t: t.marker.size))  # Bénin au premier plan
         fig.update_yaxes(categoryorder="array", categoryarray=order, title=None, showgrid=True)
         fig.update_xaxes(range=[-5, 105], showgrid=False, zeroline=False,
                          tickvals=[0, 100], ticktext=["◀ moins bien", "mieux ▶"])
         fig.add_vline(x=50, line=dict(color=NEUTRAL, dash="dot", width=1))
-        style_fig(fig, height=80 + 42 * len(order))
-        fig.update_layout(legend=dict(orientation="h", y=1.02, x=0, yanchor="bottom"), hovermode="closest")
+        style_fig(fig, height=80 + 46 * len(order))
+        fig.update_layout(showlegend=False, hovermode="closest", margin=dict(t=10))
         with st.container(border=True):
-            st.plotly_chart(fig, width="stretch")
+            country_key(comparable.sort_values("country_name_fr").country_iso3)
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
 
     # Détail : une carte par indicateur, rangées par thème (icône), avec la
     # courbe du Bénin. Grille continue pour ne pas laisser de trous.
@@ -535,14 +580,14 @@ def page_country() -> None:
         (iso,),
     )
     p_ranked = profile[profile.higher_is_better.notna() & profile.rank_among_peers.notna()]
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Mieux que la médiane des autres", f"{(profile.position_vs_peers == 'mieux que la médiane des pairs').sum()}"
+    kpis = kpi_row("country")
+    kpis.metric("Mieux que la médiane des autres", f"{(profile.position_vs_peers == 'mieux que la médiane des pairs').sum()}"
               f" / {len(p_ranked)}", border=True,
               help="Indicateurs où le sens de lecture est clair (plus = mieux, ou l'inverse).")
-    k2.metric("Moins bien que la médiane", f"{(profile.position_vs_peers == 'moins bien que la médiane des pairs').sum()}"
+    kpis.metric("Moins bien que la médiane", f"{(profile.position_vs_peers == 'moins bien que la médiane des pairs').sum()}"
               f" / {len(p_ranked)}", border=True)
-    k3.metric(f"Indicateurs classés 1er sur {len(countries)}", int((p_ranked.rank_among_peers == 1).sum()), border=True)
-    k4.metric("Données anciennes ou absentes", int(profile.is_stale.sum() + profile.latest_value.isna().sum()),
+    kpis.metric(f"Indicateurs classés 1er sur {len(countries)}", int((p_ranked.rank_among_peers == 1).sum()), border=True)
+    kpis.metric("Données anciennes ou absentes", int(profile.is_stale.sum() + profile.latest_value.isna().sum()),
               border=True, help=f"Dernière valeur publiée il y a plus de {WINDOW} ans, ou aucune valeur.")
 
     p_by_rank = p_ranked.sort_values(["rank_among_peers", "label_fr"])
@@ -648,15 +693,15 @@ def page_invest() -> None:
         reach = pop.reindex([FOCUS, *BORDERS]).sum()
 
         # --- En bref ---
-        k1, k2, k3, k4 = st.columns(4)
+        kpis = kpi_row("invest")
         if not stability.empty and FOCUS in stability.index:
             st_f = stability.loc[FOCUS]
             infl_rank = int(stability.infl_mean.rank().loc[FOCUS])
-            k1.metric(f"Croissance moyenne {vol_years[0] + 1}-{last_year}", fmt(st_f.growth_mean, "%"),
+            kpis.metric(f"Croissance moyenne {vol_years[0] + 1}-{last_year}", fmt(st_f.growth_mean, "%"),
                       border=True, delta=f"{ordinal(int(stability.growth_mean.rank(ascending=False).loc[FOCUS]))}"
                       f" sur {len(stability)}", delta_color="off", delta_arrow="off",
                       help="Croissance annuelle moyenne du PIB réel sur les 10 dernières années publiées.")
-            k2.metric(f"Inflation moyenne {vol_years[0] + 1}-{last_year}", fmt(st_f.infl_mean, "%"), border=True,
+            kpis.metric(f"Inflation moyenne {vol_years[0] + 1}-{last_year}", fmt(st_f.infl_mean, "%"), border=True,
                       delta=("la plus basse des " if infl_rank == 1 else f"{ordinal(infl_rank)} plus basse sur ")
                       + f"{len(stability)}", delta_color="off", delta_arrow="off",
                       help="Hausse annuelle moyenne des prix à la consommation : le pouvoir d'achat de vos clients "
@@ -664,12 +709,12 @@ def page_invest() -> None:
         if fx_base is not None and FOCUS in fx.columns:
             fx_change = fx[FOCUS].dropna()
             change = fx_change.loc[fx_base] / fx_change.iloc[-1] - 1
-            k3.metric(f"Franc CFA / dollar depuis {fx_base}", f"{change * 100:+.0f} %".replace("-", "−"),
+            kpis.metric(f"Franc CFA / dollar depuis {fx_base}", f"{change * 100:+.0f} %".replace("-", "−"),
                       border=True, delta="arrimé à l'euro", delta_color="off", delta_arrow="off",
                       help="Variation de la valeur de la monnaie face au dollar (taux de change officiel moyen). "
                            "Le franc CFA (XOF) a une parité fixe avec l'euro.")
         if pd.notna(reach) and reach > 0:
-            k4.metric("Marché accessible par la route", fmt(reach, "habitants"), border=True,
+            kpis.metric("Marché accessible par la route", fmt(reach, "habitants"), border=True,
                       delta=f"dont {fmt(pop.get(FOCUS), 'habitants')} au {focus_name}", delta_color="off",
                       delta_arrow="off",
                       help="Population du Bénin et de ses 4 pays frontaliers : "
@@ -700,12 +745,13 @@ def page_invest() -> None:
                 for (zone, _), total in zip(zones, totals):
                     fig.add_annotation(x=total, y=zone, text=f"<b>{fmt(total, unit)}</b>", xanchor="left",
                                        xshift=6, showarrow=False)
-                style_fig(fig, height=260)
+                style_fig(fig, height=200)
                 fig.update_layout(barmode="stack", bargap=0.35, margin=dict(l=10, r=80, t=10, b=10),
-                                  legend=dict(orientation="h", y=-0.15, x=0, traceorder="normal"))
+                                  showlegend=False)
+                country_key([i for i in [FOCUS, *BORDERS, *peer_isos] if i in values.index])
                 fig.update_xaxes(showticklabels=False, showgrid=False)
                 fig.update_yaxes(autorange="reversed")
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
 
         market_codes = ["SP.POP.1564.TO.ZS", "SL.TLF.TOTL.IN", "NY.GDP.PCAP.PP.CD"]
         indicator_cards(invest_rows[invest_rows.indicator_code.isin(market_codes)], focus_series,
@@ -726,13 +772,12 @@ def page_invest() -> None:
                         text=[f"{x:.0f} %" if pd.notna(x) else "" for x in v.values], textposition="inside",
                         insidetextanchor="middle", hovertemplate=f"%{{y}} · {label} : %{{x:.1f}} % du PIB<extra></extra>",
                     ))
-                style_fig(fig, height=330)
-                fig.update_layout(barmode="stack", bargap=0.3,
-                                  legend=dict(orientation="h", y=1.08, x=0, traceorder="normal"),
-                                  margin=dict(l=10, r=10, t=40, b=10))
+                style_fig(fig, height=300)
+                fig.update_layout(barmode="stack", bargap=0.3, showlegend=False, margin=dict(l=10, r=10, t=10, b=10))
+                chart_key([(t.name, t.marker.color) for t in fig.data])
                 fig.update_xaxes(showticklabels=False, showgrid=False)
                 fig.update_yaxes(autorange="reversed")
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
                 st.caption("Le reste du PIB correspond aux impôts nets sur les produits. Un poids élevé de "
                            "l'agriculture signale à la fois une dépendance et des besoins de transformation "
                            "(agro-industrie, logistique, stockage).")
@@ -759,9 +804,9 @@ def page_invest() -> None:
                         showlegend=False,
                     ))
                 style_fig(fig, height=360)
-                fig.update_xaxes(title="Irrégularité de la croissance (écart-type, points) →")
+                fig.update_xaxes(title="Irrégularité (écart-type, points) →")
                 fig.update_yaxes(title="Croissance moyenne (%) →")
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
                 st.caption("En haut à gauche : croissance forte et régulière. En bas à droite : faible et heurtée.")
             with s2.container(border=True):
                 st.markdown(f"**Inflation moyenne** · {vol_years[0] + 1}-{last_year}")
@@ -777,11 +822,11 @@ def page_invest() -> None:
                 style_fig(fig, height=360)
                 fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=60, t=10, b=10))
                 fig.update_xaxes(showticklabels=False, showgrid=False)
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
                 infl_sd = stability.infl_sd
                 st.caption(f"Variabilité d'une année à l'autre (écart-type) : {infl_sd.get(FOCUS):.1f} pts au "
                            f"{focus_name}, de {infl_sd.min():.1f} à {infl_sd.max():.1f} pts chez les 7 pays. "
-                           "Survolez une barre pour le détail.")
+                           "Touchez ou survolez une barre pour le détail.")
 
         if fx_base is not None and len(fx.columns):
             with st.container(border=True):
@@ -802,10 +847,11 @@ def page_invest() -> None:
                         hovertemplate=f"{label.split(' — ')[0]} · %{{x}} : %{{y:.0f}}<extra></extra>",
                     ))
                 fig.add_hline(y=100, line=dict(color=NEUTRAL, dash="dot", width=1))
-                style_fig(fig, height=320)
-                fig.update_layout(legend=dict(orientation="h", y=-0.2, x=0), hovermode="x unified")
+                style_fig(fig, height=300)
+                fig.update_layout(showlegend=False, hovermode="x unified")
                 fig.update_yaxes(title=None, ticksuffix="")
-                st.plotly_chart(fig, width="stretch")
+                chart_key([(t.name, t.line.color) for t in fig.data])
+                st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
                 ngn = fx.get("NGA")
                 if ngn is not None and fx_base in ngn.dropna().index:
                     loss = 1 - ngn.dropna().loc[fx_base] / ngn.dropna().iloc[-1]
@@ -842,7 +888,7 @@ def page_invest() -> None:
             style_fig(fig, height=320)
             fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=90, t=10, b=10))
             fig.update_xaxes(showticklabels=False, showgrid=False)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
             st.caption(f"Moyenne {int(window_start)}-{int(hist.index.max())} ({unit}), pour lisser les à-coups "
                        "d'une année sur l'autre. IDE : investissements directs étrangers. Crédit au secteur privé : "
                        "prêts des banques aux entreprises et aux ménages.")
@@ -865,12 +911,13 @@ def page_compare() -> None:
     labels = sorted(options)
     st.space("small")
     with st.container(border=True):
-        c1, c2 = st.columns([2, 3])
-        choice = c1.selectbox(
+        choice = st.selectbox(
             "Indicateur", labels,
             index=labels.index("Personnes utilisant Internet") if "Personnes utilisant Internet" in labels else 0,
         )
-        selected_peers = c2.multiselect(f"Pays comparés au {focus_name}", peer_names, default=peer_names)
+        # Pastilles plutôt que liste à étiquettes : tous les pays restent visibles sur téléphone
+        selected_peers = st.pills(f"Pays comparés au {focus_name}", peer_names, selection_mode="multi",
+                                  default=peer_names) or []
         code = options[choice]
         meta = indicators.loc[indicators.indicator_code == code].iloc[0]
         unit = meta.unit_fr
@@ -925,11 +972,11 @@ def page_compare() -> None:
                 fig.add_shape(type="line", x0=x, y0=y, x1=x, y1=y_label, xref="x", yref="y",
                               line=dict(color=COLORS[iso], width=1))
             style_fig(fig, height=440)
-            fig.update_layout(
-                legend=dict(orientation="h", y=-0.12), hovermode="x unified",
-                margin=dict(l=10, r=110, t=20, b=10),
-            )
-            st.plotly_chart(fig, width="stretch")
+            # Pas de légende : chaque courbe porte son nom. Axe borné aux années des données :
+            # sinon Plotly l'étire pour loger ces noms (jusqu'à 2040 sur un téléphone).
+            fig.update_layout(showlegend=False, hovermode="x unified", margin=dict(l=10, r=110, t=20, b=10))
+            fig.update_xaxes(range=[series.year.min() - 0.5, series.year.max() + 0.5])
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
 
         with right.container(border=True):
             st.markdown("**Dernière valeur publiée**")
@@ -946,7 +993,7 @@ def page_compare() -> None:
             style_fig(fig, height=440)
             fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=90, t=20, b=10))
             fig.update_xaxes(showticklabels=False, showgrid=False)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
 
         notes = [f"Le {focus_name} est en vert ; chaque voisin garde la même couleur sur tous les graphiques."]
         if pd.notna(meta.higher_is_better):
@@ -957,7 +1004,7 @@ def page_compare() -> None:
         n1, n2 = st.columns([4, 1])
         n1.caption(" ".join(notes))
         n2.download_button(
-            "Télécharger l'indicateur (CSV)", to_csv(indicator_export(code)),
+            "Télécharger (CSV)", to_csv(indicator_export(code)),
             file_name=f"benin_open_data_hub_{code}.csv", mime="text/csv", icon=":material/download:",
             width="stretch", help="Toutes les années et les 7 pays, avec unité, statut de collecte et source.",
         )
@@ -981,13 +1028,13 @@ def page_odfa() -> None:
         )
         recent = (odfa.freshness == "moins d'un an").sum()
         licensed = odfa.license.notna().sum()
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Jeux inventoriés", f"{len(odfa):,}".replace(",", "\u202f"), border=True)
-        k2.metric("Producteurs", odfa.source_name.nunique(), border=True,
+        kpis = kpi_row("odfa")
+        kpis.metric("Jeux inventoriés", f"{len(odfa):,}".replace(",", "\u202f"), border=True)
+        kpis.metric("Producteurs", odfa.source_name.nunique(), border=True,
                   help="Noms tels que saisis sur le portail (une même institution peut apparaître sous plusieurs noms).")
-        k3.metric("Mis à jour depuis moins d'un an", int(recent), border=True,
+        kpis.metric("Mis à jour depuis moins d'un an", int(recent), border=True,
                   delta=f"{share(recent, len(odfa))} du total", delta_color="off", delta_arrow="off")
-        k4.metric("Licence déclarée", int(licensed), border=True,
+        kpis.metric("Licence déclarée", int(licensed), border=True,
                   delta=f"{share(licensed, len(odfa))} du total", delta_color="off", delta_arrow="off",
                   help="Sans licence déclarée, vérifier les conditions d'utilisation sur le portail.")
 
@@ -995,12 +1042,13 @@ def page_odfa() -> None:
         st.space("small")
         st.subheader("Âge des jeux de données")
         periods = odfa.update_period.value_counts()
-        a1, a2, a3 = st.columns(3)
-        for col, period in zip((a1, a2, a3), odfa_catalog.UPDATE_PERIODS):
+        ages = kpi_row("odfa-age")
+        for period in odfa_catalog.UPDATE_PERIODS[:3]:  # « date inconnue » : signalée à part, plus bas
             n = int(periods.get(period, 0))
             label = {"depuis 2024": "Mis à jour depuis 2024", "2020 à 2023": "Dernière mise à jour entre 2020 et 2023",
                      "avant 2020": "Dernière mise à jour avant 2020"}[period]
-            col.metric(label, n, border=True, delta=f"{share(n, len(odfa))} du total", delta_color="off", delta_arrow="off")
+            ages.metric(label, n, border=True, delta=f"{share(n, len(odfa))} du total", delta_color="off",
+                        delta_arrow="off")
         if periods.get("date inconnue", 0):
             st.caption(f"{int(periods['date inconnue'])} jeu(x) sans date de mise à jour.")
         ages = odfa_catalog.age_table(odfa, "producer")
@@ -1017,11 +1065,11 @@ def page_odfa() -> None:
                     insidetextanchor="middle", hovertemplate=f"%{{y}} · {period} : %{{x}} jeux<extra></extra>",
                 ))
             style_fig(fig, height=80 + 45 * len(ages))
-            fig.update_layout(barmode="stack", bargap=0.3, legend=dict(orientation="h", y=1.1, x=0, traceorder="normal"),
-                              margin=dict(l=10, r=10, t=40, b=10))
+            fig.update_layout(barmode="stack", bargap=0.3, showlegend=False, margin=dict(l=10, r=10, t=10, b=10))
+            chart_key([(t.name, t.marker.color) for t in fig.data])
             fig.update_xaxes(showticklabels=False, showgrid=False)
             fig.update_yaxes(autorange="reversed")
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
             st.caption("Producteurs regroupés en familles (INStaD et ex-INSAE, ministères, agences publiques, "
                        "organismes internationaux). Date de mise à jour déclarée par le portail : elle peut être "
                        "postérieure à la période couverte par les données.")
@@ -1046,7 +1094,7 @@ def page_odfa() -> None:
             style_fig(fig, height=60 + 30 * len(by_theme))
             fig.update_layout(showlegend=False, bargap=0.3, margin=dict(l=10, r=40, t=10, b=10))
             fig.update_xaxes(showticklabels=False, showgrid=False)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
         with g2.container(border=True):
             st.markdown("**Année de dernière mise à jour**")
             by_year = odfa.last_updated_on.dt.year.value_counts().sort_index()
@@ -1060,7 +1108,7 @@ def page_odfa() -> None:
             fig.update_layout(showlegend=False, bargap=0.3, margin=dict(l=10, r=10, t=30, b=10))
             fig.update_yaxes(showticklabels=False, showgrid=False)
             fig.update_xaxes(type="category")
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
             oldest = by_year.idxmax()
             st.caption(f"{by_year.max()} jeux ont été mis à jour pour la dernière fois en {oldest} : "
                        "de bons candidats à une actualisation.")
@@ -1123,16 +1171,16 @@ def page_catalog() -> None:
     )
     counts = catalog.kind.value_counts()
     if len(counts):
-        for col, (kind, n) in zip(st.columns(len(counts) + 1), counts.items()):
+        counts_row = kpi_row("catalog")
+        for kind, n in counts.items():
             plural = {"jeu de données": "jeux de données", "fichier déposé": "fichiers déposés",
                       "source référencée": "sources référencées"}.get(kind, kind + "s")
-            col.metric((plural if n > 1 else kind).capitalize(), int(n), border=True)
+            counts_row.metric((plural if n > 1 else kind).capitalize(), int(n), border=True)
 
     with st.container(border=True):
-        f1, f2 = st.columns([1, 2])
         all_kinds = sorted(catalog.kind.unique())
-        kinds = f1.multiselect("Type", all_kinds, default=all_kinds)
-        search = f2.text_input("Rechercher", placeholder="ex. santé, ménages, électricité…",
+        kinds = st.pills("Type", all_kinds, selection_mode="multi", default=all_kinds) or []
+        search = st.text_input("Rechercher", placeholder="ex. santé, ménages, électricité…",
                                icon=":material/search:")
     view = catalog[catalog.kind.isin(kinds)]
     if search:
@@ -1182,7 +1230,7 @@ def page_catalog() -> None:
                                    hovertemplate="%{x} : %{y:,} occurrences<extra></extra>"))
             style_fig(fig, height=260)
             fig.update_layout(showlegend=False, bargap=0.2)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
             st.caption("Source : [GBIF](https://www.gbif.org/country/BJ/summary), API publique ; licence propre "
                        "à chaque jeu (CC0, CC BY, CC BY-NC). Agrégats seulement : les occurrences ne sont pas copiées.")
 
@@ -1211,12 +1259,12 @@ def page_access() -> None:
         n_ok = int((availability.badge == "joignable").sum())
         n_down = int((availability.badge == "en panne").sum())
         n_forbidden = int((availability.badge == "collecte interdite").sum())
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Sources testées", len(availability), border=True)
-        k2.metric("Joignables", n_ok, border=True)
-        k3.metric("En panne", n_down, border=True,
+        kpis = kpi_row("access")
+        kpis.metric("Sources testées", len(availability), border=True)
+        kpis.metric("Joignables", n_ok, border=True)
+        kpis.metric("En panne", n_down, border=True,
                   help="Pas de réponse, erreur serveur, accès refusé ou page introuvable au dernier test.")
-        k4.metric("Collecte interdite", n_forbidden, border=True,
+        kpis.metric("Collecte interdite", n_forbidden, border=True,
                   help="Le site interdit la collecte automatisée (robots.txt) : seul /robots.txt est testé, "
                        "les fichiers sont déposés à la main.")
 
@@ -1276,11 +1324,11 @@ def page_access() -> None:
         focus_row = current[current.country_iso3 == FOCUS]
         if len(focus_row):
             f = focus_row.iloc[0]
-            o1, o2, o3, o4 = st.columns(4)
-            o1.metric(f"Score ODIN {last_edition}", f"{f.overall_score:.1f}".replace(".", ","), border=True)
-            o2.metric("Couverture", f"{f.coverage_score:.1f}".replace(".", ","), border=True)
-            o3.metric("Ouverture", f"{f.openness_score:.1f}".replace(".", ","), border=True)
-            o4.metric(f"Rang parmi les {int(f.n_hub_countries)} pays du hub", ordinal(int(f.rank_among_hub)),
+            kpis = kpi_row("odin")
+            kpis.metric(f"Score ODIN {last_edition}", f"{f.overall_score:.1f}".replace(".", ","), border=True)
+            kpis.metric("Couverture", f"{f.coverage_score:.1f}".replace(".", ","), border=True)
+            kpis.metric("Ouverture", f"{f.openness_score:.1f}".replace(".", ","), border=True)
+            kpis.metric(f"Rang parmi les {int(f.n_hub_countries)} pays du hub", ordinal(int(f.rank_among_hub)),
                       border=True,
                       help=None if pd.isna(f.rank_world) else
                       f"{ordinal(int(f.rank_world))} sur {int(f.n_countries_ranked)} pays dans le monde.")
@@ -1296,7 +1344,7 @@ def page_access() -> None:
             style_fig(fig, height=320)
             fig.update_layout(showlegend=False, bargap=0.35, margin=dict(l=10, r=50, t=10, b=10))
             fig.update_xaxes(showticklabels=False, showgrid=False, range=[0, 100])
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
         with d2.container(border=True):
             st.markdown("**Évolution du score global** · éditions ODIN")
             fig = go.Figure()
@@ -1308,11 +1356,12 @@ def page_access() -> None:
                     hovertemplate=f"{name} · %{{x}} : %{{y:.1f}}<extra></extra>",
                 ))
             fig.data = tuple(sorted(fig.data, key=lambda t: t.line.width))
-            style_fig(fig, height=320)
-            fig.update_layout(legend=dict(orientation="h", y=-0.2, x=0), hovermode="x unified")
+            style_fig(fig, height=300)
+            fig.update_layout(showlegend=False, hovermode="x unified")
             fig.update_xaxes(tickvals=sorted(odin_scores.edition_year.unique()))
+            country_key(odin_scores.country_iso3)
             fig.update_yaxes(range=[0, 100])
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHART_CONFIG)
         st.caption("Source : [Open Data Watch, Open Data Inventory](https://odin.opendatawatch.com/), licence "
                    "CC BY 4.0. La méthodologie a changé entre éditions : les évolutions sont indicatives.")
 
