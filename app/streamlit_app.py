@@ -49,19 +49,12 @@ SECTOR_COLORS = {"NV.AGR.TOTL.ZS": "#A47148", "NV.IND.TOTL.ZS": "#5F6B7A", "NV.S
 st.set_page_config(page_title="Bénin Open Data Hub", page_icon=":material/insights:", layout="wide")
 
 # Quelques styles que le thème (.streamlit/config.toml) ne couvre pas : marge
-# haute, barre d'onglets, bandeau d'en-tête et listes « points forts / à surveiller ».
+# haute, bandeau d'en-tête, affichage sur téléphone et listes « points forts / à surveiller ».
 st.html(
     """
 <style>
-/* Marge haute par défaut (~6rem) trop large : l'en-tête remonte sous la barre Streamlit. */
-[data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
-[data-testid="stHeader"] { background: transparent; }
-/* Onglets : barre de navigation pleine largeur, libellés plus lisibles. */
-[data-testid="stTabs"] [role="tablist"] { gap: .25rem; background: #F0F2EC; padding: .3rem; border-radius: .7rem; border: 0; box-shadow: none; }
-[data-testid="stTab"] { padding: .5rem 1rem; border-radius: .5rem; height: auto; }
-[data-testid="stTab"] p { font-size: .98rem; font-weight: 500; }
-[data-testid="stTab"][aria-selected="true"] { background: #FFFFFF; box-shadow: 0 1px 2px rgba(31,35,40,.10); }
-[data-testid="stTabs"] .react-aria-SelectionIndicator { display: none; }
+/* Marge haute par défaut (~6rem) trop large : l'en-tête remonte juste sous le menu des pages. */
+[data-testid="stMainBlockContainer"] { padding-top: 4.5rem; }
 .bodh-hero { padding: 0 0 0.5rem 0; }
 .bodh-flag { display: flex; height: 6px; width: 96px; border-radius: 3px; overflow: hidden; margin-bottom: 1rem; }
 .bodh-flag span:nth-child(1) { flex: 1; background: #0F7B4B; }
@@ -76,6 +69,17 @@ st.html(
 .bodh-list .lbl { font-weight: 500; color: #1F2328; }
 .bodh-list .val { color: #5B6169; font-size: .9rem; white-space: nowrap; }
 .bodh-list .rank { font-weight: 600; color: #1F2328; }
+.bodh-title-page { font-size: 2rem; }
+/* Téléphone : en-tête plus compact, valeurs des listes autorisées à passer à la ligne. */
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding-top: 3.5rem; padding-left: 1rem; padding-right: 1rem; }
+  .bodh-flag { margin-bottom: .6rem; }
+  .bodh-title { font-size: 1.8rem; }
+  .bodh-title-page { font-size: 1.5rem; }
+  .bodh-lede { font-size: .95rem; }
+  .bodh-list li { flex-wrap: wrap; gap: .25rem .75rem; }
+  .bodh-list .val { white-space: normal; }
+}
 </style>
 """
 )
@@ -321,7 +325,7 @@ scorecard = query("select * from marts.mart_benin_scorecard order by theme, labe
 countries = query("select * from marts.dim_country")
 indicators = query("select * from marts.dim_indicator")
 # Deux familles d'indicateurs (champ `section` de config/sources.yml) : le tableau de bord
-# général et l'onglet « Investir au Bénin ». Exports antérieurs sans section : tableau de bord.
+# général et la page « Investir au Bénin ». Exports antérieurs sans section : tableau de bord.
 if "section" not in indicators.columns:
     indicators["section"] = "tableau de bord"
 dashboard_codes = set(indicators.loc[indicators.section == "tableau de bord", "indicator_code"])
@@ -388,8 +392,12 @@ COLORS = {iso: PEER_PALETTE[i % len(PEER_PALETTE)] for i, iso in enumerate(peer_
 COLORS[FOCUS] = FOCUS_COLOR
 
 # --- En-tête -----------------------------------------------------------------
-st.html(
-    f"""
+def render_header(page_title: str | None) -> None:
+    """En-tête complet sur l'accueil ; sur les autres pages, une version courte
+    avec le titre de la page, pour ne pas repousser le contenu sur mobile."""
+    if page_title is None:
+        st.html(
+            f"""
 <div class="bodh-hero">
   <div class="bodh-flag"><span></span><span></span><span></span></div>
   <div class="bodh-eyebrow">Open data · Afrique de l'Ouest</div>
@@ -399,36 +407,36 @@ st.html(
   Sources ouvertes, pipeline reproductible.</p>
 </div>
 """
-)
-st.markdown(
-    f":green-badge[:material/monitoring: {len(scorecard_all)} indicateurs] "
-    f":gray-badge[:material/public: {len(countries)} pays] "
-    ":gray-badge[:material/database: World Bank WDI] "
-    + (f":gray-badge[:material/folder_open: {len(odfa):,} jeux Open Data for Africa] ".replace(",", " ")
-       if len(odfa) else "")
-    + f":gray-badge[:material/update: Collecte du {fmt_date(freshness.ing)}]"
-)
+        )
+        st.markdown(
+            f":green-badge[:material/monitoring: {len(scorecard_all)} indicateurs] "
+            f":gray-badge[:material/public: {len(countries)} pays] "
+            ":gray-badge[:material/database: World Bank WDI] "
+            + (f":gray-badge[:material/folder_open: {len(odfa):,} jeux Open Data for Africa] ".replace(",", " ")
+               if len(odfa) else "")
+            + f":gray-badge[:material/update: Collecte du {fmt_date(freshness.ing)}]"
+        )
+    else:
+        st.html(
+            f"""
+<div class="bodh-hero">
+  <div class="bodh-flag"><span></span><span></span><span></span></div>
+  <div class="bodh-eyebrow">Bénin Open Data Hub</div>
+  <div class="bodh-title bodh-title-page">{html.escape(page_title)}</div>
+</div>
+"""
+        )
 
-if is_demo:
-    st.warning(
-        "**Données de démonstration.** Les valeurs affichées sont synthétiques et servent à tester "
-        "le pipeline. Lance `make run` pour charger les vraies données World Bank et INStaD.",
-        icon=":material/warning:",
-    )
+    if is_demo:
+        st.warning(
+            "**Données de démonstration.** Les valeurs affichées sont synthétiques et servent à tester "
+            "le pipeline. Lance `make run` pour charger les vraies données World Bank et INStaD.",
+            icon=":material/warning:",
+        )
 
-tab_score, tab_country, tab_invest, tab_compare, tab_odfa, tab_catalog, tab_access, tab_about = st.tabs([
-    ":material/dashboard: Tableau de bord",
-    ":material/flag: Fiche pays",
-    ":material/business_center: Investir au Bénin",
-    ":material/compare_arrows: Comparer",
-    ":material/folder_open: Open Data for Africa",
-    ":material/menu_book: Catalogue",
-    ":material/network_check: Accès aux données",
-    ":material/info: Méthode",
-])
 
 # --- Tableau de bord ---------------------------------------------------------
-with tab_score:
+def page_dashboard() -> None:
     ranked = scorecard[scorecard.higher_is_better.notna() & scorecard.rank_among_peers.notna()]
     better = (scorecard.position_vs_peers == "mieux que la médiane des pairs").sum()
     worse = (scorecard.position_vs_peers == "moins bien que la médiane des pairs").sum()
@@ -506,7 +514,7 @@ with tab_score:
     indicator_cards(scorecard, focus_series, "médiane des voisins")
 
 # --- Fiche pays --------------------------------------------------------------
-with tab_country:
+def page_country() -> None:
     st.space("small")
     names = dict(zip(countries.country_iso3, countries.country_name_fr))
     with st.container(border=True):
@@ -588,7 +596,7 @@ with tab_country:
     indicator_cards(profile, country_series, "médiane des autres pays")
 
 # --- Investir au Bénin ---------------------------------------------------------
-with tab_invest:
+def page_invest() -> None:
     st.space("small")
     st.markdown(
         f"Trois questions qu'un entrepreneur ou un investisseur se pose avant de s'installer au {focus_name}, "
@@ -603,7 +611,7 @@ with tab_invest:
         """
     )
     if not invest_codes or not invest_codes & set(all_series.indicator_code):
-        st.info("Les indicateurs de cet onglet ne sont pas encore collectés : lance `make run` "
+        st.info("Les indicateurs de cette page ne sont pas encore collectés : lance `make run` "
                 "(ou le workflow `refresh` sur GitHub).", icon=":material/info:")
     else:
         names = dict(zip(countries.country_iso3, countries.country_name_fr))
@@ -845,14 +853,14 @@ with tab_invest:
             "*Doing Business* n'est pas utilisé : la Banque mondiale l'a arrêté en 2021 après des irrégularités.",
             icon=":material/lightbulb:",
         )
-        with st.expander("Définitions des indicateurs de cet onglet", icon=":material/menu_book:"):
+        with st.expander("Définitions des indicateurs de cette page", icon=":material/menu_book:"):
             for code in indicators.loc[indicators.section == "investir", "indicator_code"]:
                 st.markdown(definition_md(code))
         st.caption("Ces analyses éclairent une décision à partir de statistiques publiques ; elles ne constituent "
                    "pas un conseil en investissement. Source : World Bank, World Development Indicators.")
 
 # --- Comparer ----------------------------------------------------------------
-with tab_compare:
+def page_compare() -> None:
     options = dict(zip(scorecard_all.label_fr, scorecard_all.indicator_code))
     labels = sorted(options)
     st.space("small")
@@ -955,7 +963,7 @@ with tab_compare:
         )
 
 # --- Open Data for Africa ----------------------------------------------------
-with tab_odfa:
+def page_odfa() -> None:
     st.space("small")
     st.markdown(
         f"Le portail [Open Data for Africa — Bénin]({ODFA_URL}), animé par la Banque africaine de "
@@ -1105,7 +1113,7 @@ with tab_odfa:
                            icon=":material/download:", width="stretch")
 
 # --- Catalogue ---------------------------------------------------------------
-with tab_catalog:
+def page_catalog() -> None:
     st.space("small")
     st.markdown(
         "Tout ce que le hub sait des données disponibles sur le Bénin, au même endroit : indicateurs "
@@ -1189,7 +1197,7 @@ with tab_catalog:
                 "réapparaîtront dès que le site sera de nouveau en ligne.", icon=":material/info:")
 
 # --- Accès aux données -------------------------------------------------------
-with tab_access:
+def page_access() -> None:
     st.space("small")
     st.markdown(
         "Chaque collecte teste aussi l'accès à toutes les sources du hub, y compris celles qui ne sont "
@@ -1309,7 +1317,7 @@ with tab_access:
                    "CC BY 4.0. La méthodologie a changé entre éditions : les évolutions sont indicatives.")
 
 # --- Méthode -----------------------------------------------------------------
-with tab_about:
+def page_method() -> None:
     st.space("small")
     m1, m2, m3 = st.columns(3)
     with m1.container(border=True, height="stretch"):
@@ -1317,7 +1325,7 @@ with tab_about:
             """
 :material/database: **Sources**
 
-- *World Bank — World Development Indicators*, API publique v2 : indicateurs du tableau de bord et de l'onglet Investir, avec leur définition officielle.
+- *World Bank — World Development Indicators*, API publique v2 : indicateurs du tableau de bord et de la page Investir, avec leur définition officielle.
 - *INStaD — catalogue de microdonnées (NADA)* : métadonnées des enquêtes uniquement.
 - *Open Data for Africa — Bénin* (BAD) : inventaire des jeux via l'API du portail (titre, producteur, mise à jour, licence).
 - *ODIN* (Open Data Watch, CC BY 4.0) : scores d'ouverture des statistiques officielles.
@@ -1356,7 +1364,7 @@ Projet open source : pipeline Python → DuckDB → dbt → Streamlit. [Code sur
 Une source **inaccessible** ne répond pas au moment du test (serveur en panne, maintenance, accès refusé,
 nom de domaine introuvable) : la donnée existe peut-être, mais personne ne peut la consulter. Une donnée
 **absente** n'est pas publiée par une source qui, elle, répond (ex. aucune valeur de dépenses de R&D pour
-le Bénin à la World Bank). Le hub teste chaque source à chaque collecte (onglet *Accès aux données*) et
+le Bénin à la World Bank). Le hub teste chaque source à chaque collecte (page *Accès aux données*) et
 n'invente jamais de valeur : une case vide reste vide. Chaque valeur porte un statut de collecte
 (*collectée* ou *démo*) et la date de publication de sa source.
 """
@@ -1389,6 +1397,28 @@ n'invente jamais de valeur : une case vide reste vide. Chaque valeur porte un st
         },
         hide_index=True, width="stretch", alt="Définitions, unités et sources de tous les indicateurs",
     )
+
+# --- Navigation --------------------------------------------------------------
+# Pages plutôt qu'onglets : 8 onglets débordaient de l'écran d'un téléphone. Le menu
+# du haut se replie dans un menu latéral sur mobile, et chaque page a son adresse.
+HOME = st.Page(page_dashboard, title="Tableau de bord", icon=":material/dashboard:", default=True)
+navigation = st.navigation({
+    "": [
+        HOME,
+        st.Page(page_country, title="Fiche pays", icon=":material/flag:", url_path="fiche-pays"),
+        st.Page(page_invest, title="Investir au Bénin", icon=":material/business_center:", url_path="investir"),
+        st.Page(page_compare, title="Comparer", icon=":material/compare_arrows:", url_path="comparer"),
+    ],
+    "Données": [
+        st.Page(page_odfa, title="Open Data for Africa", icon=":material/folder_open:",
+                url_path="open-data-for-africa"),
+        st.Page(page_catalog, title="Catalogue", icon=":material/menu_book:", url_path="catalogue"),
+        st.Page(page_access, title="Accès aux données", icon=":material/network_check:", url_path="acces"),
+        st.Page(page_method, title="Méthode", icon=":material/info:", url_path="methode"),
+    ],
+}, position="top")
+render_header(None if navigation.title == HOME.title else navigation.title)
+navigation.run()
 
 st.divider()
 st.caption(
