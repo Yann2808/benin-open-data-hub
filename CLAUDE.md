@@ -32,8 +32,8 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   mart_data_catalog (types : indicateur, enquête, fichier déposé, jeu de données, source référencée), mart_odfa_datasets,
   mart_source_availability, mart_odin_scores, mart_gbif_yearly. 51 tests dbt, 52 tests pytest (dont un test de fumée
   de l'app avec `AppTest`).
-- `app/streamlit_app.py` : 8 onglets (Tableau de bord, Fiche pays, Investir au Bénin, Comparer, Open Data for Africa,
-  Catalogue, Accès aux données, Méthode). Définition, unité, année et source à côté de chaque chiffre (`definition_md`,
+- `app/streamlit_app.py` : 8 pages `st.navigation` (menu en haut, replié dans un menu latéral sur téléphone ; adresses `/fiche-pays`, `/investir`, etc.) : Tableau de bord, Fiche pays, Investir au Bénin, Comparer, Open Data for Africa,
+  Catalogue, Accès aux données, Méthode. Une fonction `page_*` par page, routeur en fin de fichier ; le test de fumée les ouvre toutes. Définition, unité, année et source à côté de chaque chiffre (`definition_md`,
   `source_line`). Abonnements (« pour 100 habitants ») et personnes (« % de la population ») jamais confondus :
   `tests/test_labels.py` le vérifie. Investir : marché (zones Bénin / + frontaliers / + reste du hub), structure de l'économie,
   stabilité sur 10 ans (moyenne et écart-type croissance/inflation, monnaie base 100 en 2015), crédit, IDE, ouverture.
@@ -47,6 +47,10 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   données jusqu'à 1 h (redéployer le code ne vide pas ce cache). Pour forcer : « Reboot app » sur share.streamlit.io.
   Thème dans `.streamlit/config.toml` (vert Bénin `#0F7B4B`, Inter / Space Grotesk, clair imposé).
   Couleurs des pays attribuées par code ISO, jamais par rang : le Bénin en vert, chaque voisin sa couleur.
+  Mobile : graphiques via `style_fig` + `config=CHART_CONFIG` (ni barre d'outils ni zoom), légendes en HTML
+  avec `chart_key` / `country_key` (la légende Plotly s'empile en colonne sur téléphone), chiffres clés dans
+  `kpi_row` (2 par ligne sous 640 px), `st.pills` plutôt que `multiselect` pour les petites listes.
+  Vérifier en 390 px de large avant de merger.
 - `.github/workflows/refresh.yml` : tests à chaque push et PR ; collecte réelle chaque lundi 05:17 UTC
   (ou `workflow_dispatch`), dbt build, export Parquet commité sur `main` par `github-actions[bot]`.
 - `.devcontainer/` : config Codespaces générée par Streamlit Cloud (lance l'app sur le port 8501).
