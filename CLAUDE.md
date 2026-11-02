@@ -66,7 +66,9 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 
 ## Commandes
 `make venv` · `make install` · `make demo` (données synthétiques) · `make run` · `make transform` ·
-`make app` · `make test` · `make diagnose`. Le Makefile utilise `.venv/` même non activé.
+`make app` · `make test` · `make docs` · `make diagnose`. Le Makefile utilise `.venv/` même non activé.
+`make docs` sert la doc dbt sur le port 8081 (`DOCS_PORT`) : 8080 est pris par Jenkins sur le Mac de Yann.
+La doc dbt n'est pas encore en ligne (voir Prochaines étapes).
 
 ## Environnement de Yann (important)
 - MacBook Pro **Intel x86_64**, macOS ancien (≤ 11). Conda installé avec `(base)` actif par défaut.
@@ -96,6 +98,11 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 2. Accès API ODFA (identifiants) pour collecter les valeurs ; humaniser les titres des jeux (slugs).
 3. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
 4. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
+5. Doc dbt en ligne sur GitHub Pages (https://yann2808.github.io/benin-open-data-hub/) : dans `refresh.yml`,
+   après `dbt build`, `dbt docs generate --static` (→ `target/static_index.html`), puis `upload-pages-artifact`
+   + `deploy-pages`, sur `main` seulement. Prérequis : Pages activé avec « GitHub Actions » comme source
+   (accord de Yann, c'est une mise en ligne). Puis lien dans le README et la page Méthode. Publie la structure
+   (modèles, SQL, tests), pas les valeurs. Branche et PR dédiées.
 
 ## Conventions
 - Code et commentaires en français, noms de variables en anglais.
