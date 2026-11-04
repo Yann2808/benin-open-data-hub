@@ -91,7 +91,6 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 
 ## Prochaines étapes
 0. Relire et fusionner la PR de la nuit ; décisions en attente dans `RAPPORT_NUIT.md` (ARCEP, budget, R&D).
-1. Gouvernance WGI (6 indicateurs, base 3 de l'API World Bank) sur la page Investir.
 2. Accès API ODFA (identifiants) pour collecter les valeurs ; humaniser les titres des jeux (slugs).
 3. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
 4. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
