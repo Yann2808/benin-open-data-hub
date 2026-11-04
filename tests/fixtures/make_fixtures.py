@@ -48,10 +48,12 @@ SHAPES = {
     "BX.KLT.DINV.WD.GD.ZS": (2.0, 0.0, 0.4),
     "BX.KLT.DINV.CD.WD": (2e8, 0.0, 0.4),
     "NE.TRD.GNFS.ZS": (55, 0.0, 0.08),
+    # Gouvernance (WGI) : scores de 0 à 100
+    **{f"GOV_WGI_{d}.SC": (45, 0.0, 0.08) for d in ("VA", "PV", "GE", "RQ", "RL", "CC")},
 }
 ADDITIVE = {"NY.GDP.MKTP.KD.ZG", "FP.CPI.TOTL.ZG", "SL.UEM.TOTL.ZS", "NV.AGR.TOTL.ZS", "NV.IND.TOTL.ZS",
             "NV.SRV.TOTL.ZS", "PA.NUS.FCRF", "FS.AST.PRVT.GD.ZS", "BX.KLT.DINV.WD.GD.ZS",
-            "BX.KLT.DINV.CD.WD", "NE.TRD.GNFS.ZS"}
+            "BX.KLT.DINV.CD.WD", "NE.TRD.GNFS.ZS", *(c for c in SHAPES if c.startswith("GOV_WGI_"))}
 CAPPED = {"SP.URB.TOTL.IN.ZS", "IT.NET.USER.ZS", "EG.ELC.ACCS.ZS"}
 
 

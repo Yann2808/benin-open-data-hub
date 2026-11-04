@@ -7,7 +7,7 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 
 ## Architecture
 - `ingestion/` (Python) → DuckDB `warehouse/benin.duckdb`, schéma `raw.*` (tout en varchar)
-  - `worldbank.py` : API World Bank v2, 25 indicateurs × 7 pays × 2000-2025. **Source indispensable.**
+  - `worldbank.py` : API World Bank v2, 31 indicateurs × 7 pays × 2000-2025 (25 WDI + 6 WGI, même adresse). **Source indispensable.**
     Définitions officielles via `/v2/fr/indicator` (repli sur l'anglais si la traduction est vide) → `raw.wb_indicator_meta`.
   - `nada.py` : catalogue INStaD (nada.instad.bj). **Source optionnelle** : un échec ne bloque pas le pipeline.
   - `odfa.py` : portail Open Data for Africa — Bénin (Knoema, BAD) via son API. `make run` rafraîchit le catalogue,
@@ -30,14 +30,17 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 - `transform/` (dbt-duckdb) : staging (vues) → marts (tables) : dim_country, dim_indicator,
   fct_indicator_values (avec `collection_status` collectée/démo), mart_latest_values, mart_benin_scorecard,
   mart_data_catalog (types : indicateur, enquête, fichier déposé, jeu de données, source référencée), mart_odfa_datasets,
-  mart_source_availability, mart_odin_scores, mart_gbif_yearly. 51 tests dbt, 60 tests pytest (dont deux tests
+  mart_source_availability, mart_odin_scores, mart_gbif_yearly. 53 tests dbt, 62 tests pytest (dont deux tests
   de l'app avec `AppTest`).
 - `app/streamlit_app.py` : 8 pages `st.navigation` (menu en haut, replié dans un menu latéral sur téléphone ; adresses `/fiche-pays`, `/investir`, etc.) : Tableau de bord, Fiche pays, Investir au Bénin, Comparer, Open Data for Africa,
   Catalogue, Accès aux données, Méthode. Une fonction `page_*` par page, routeur en fin de fichier ; le test de fumée les ouvre toutes. Définition, unité, année et source à côté de chaque chiffre (`definition_md`,
   `source_line`). Abonnements (« pour 100 habitants ») et personnes (« % de la population ») jamais confondus :
   `tests/test_labels.py` le vérifie. Investir : marché (zones Bénin / + frontaliers / + reste du hub), structure de l'économie,
   stabilité sur 10 ans (moyenne et écart-type croissance/inflation, monnaie base 100 en 2015), crédit, IDE, ouverture.
-  Pas de Doing Business (arrêté en 2021) ; gouvernance WGI prévue (autre base de l'API World Bank, source 3).
+  gouvernance (6 scores WGI de 0 à 100, section 4, masquée tant que les exports ne les contiennent pas).
+  Pas de Doing Business (arrêté en 2021). WGI : l'API ne publie pas de définition → champ `definition` dans
+  `config/sources.yml` (« rédigée par le hub »), champ `source: wgi` pour le nom et le lien de la source
+  (`dim_indicator.source_db`). Un score sur 100 évolue en points, comme un % (`change_in_points`, SQL et pandas).
   Fiche pays : `country_profile()` refait en pandas le calcul de `mart_benin_scorecard` pour n'importe quel pays
   (à garder aligné avec le SQL) ; sélecteur lié à l'URL (`?pays=Togo`, libellé du pays).
   `app/odfa_catalog.py` : titres ODFA lisibles depuis les slugs, thème estimé par mots-clés, famille de producteur,
@@ -78,30 +81,36 @@ La doc dbt n'est pas encore en ligne (voir Prochaines étapes).
   Déjà géré par un marqueur dans `requirements.txt` ; installer avec `pip install --prefer-binary`.
 - Le Python système (`python3` de macOS) est trop ancien : ne pas l'utiliser.
 
-## État au 2026-10-21
-- ⏳ Branche `nightly/2026-10-21` (mission de nuit) : baromètre d'accès, définitions, âge ODFA, audit des sources,
-  ODIN, GBIF, HDX, exports CSV, modèle d'issue. PR ouverte, à relire ; voir `RAPPORT_NUIT.md`.
-- ❌ data.gouv.bj : le domaine ne résout plus en DNS au 2026-10-20.
-- ✅ Dépôt public https://github.com/Yann2808/benin-open-data-hub (PR #1 mergée : ODFA + refonte du dashboard).
-- ✅ Onglet « Investir au Bénin » en ligne (PR #5 ; la PR #4 visait la mauvaise branche). Refresh du 2026-10-19 :
-  23 indicateurs (12 tableau de bord + 11 investir), 4 105 valeurs dans les exports.
+## État au 2026-11-04
 - ✅ Dashboard public : https://bj-odh.streamlit.app/ (Streamlit Community Cloud, branche `main`,
   fichier `app/streamlit_app.py`, visibilité publique). Redéploiement automatique à chaque commit sur `main`.
-- ✅ Collecte World Bank réelle OK (jusqu'à 2025), dbt OK.
+- ✅ Dépôt public https://github.com/Yann2808/benin-open-data-hub. PR mergées : #1 (ODFA, dashboard),
+  #5 (Investir ; la #4 visait la mauvaise branche), #7 (mission de nuit du 2026-10-21 : baromètre d'accès,
+  définitions, âge ODFA, audit, ODIN, GBIF, HDX, exports CSV), #8 à #10 (navigation par pages, parcours,
+  graphiques Altair : mobile et accessibilité), #11 (`make docs` sur le port 8081), #12 (cache invalidé à chaque refresh).
+- ⏳ PR #13 : gouvernance WGI sur la page Investir. Après le merge : `gh workflow run refresh.yml`, sinon la
+  section reste masquée en ligne jusqu'au lundi suivant.
+- ✅ Collecte hebdomadaire OK (2026-10-26, 2026-11-02) : 25 indicateurs WDI, 4 364 valeurs dans les exports.
+  Avec les 6 WGI (collecte locale du 2026-11-04) : 31 indicateurs, 5 414 valeurs.
 - ✅ Catalogue ODFA : 1 107 jeux inventoriés ; ❌ valeurs non collectées (403 Cloudflare, voir plus haut).
-- ❌ INStaD (nada.instad.bj) : tout le site en maintenance (404/503) au 2026-10-12. Source optionnelle, on attend.
+- ❌ INStaD (nada.instad.bj) : 404 à chaque test du baromètre depuis le 2026-10-12 (dernier : 2026-11-02).
+- ❌ data.gouv.bj : le domaine ne résout plus en DNS depuis le 2026-10-20 (dernier test : 2026-11-04).
+- ⏳ `RAPPORT_NUIT.md` (non versionné) : décisions encore en attente (ARCEP, budget DGB, IGN, R&D, ODIN, HDX).
 
 ## Prochaines étapes
-0. Relire et fusionner la PR de la nuit ; décisions en attente dans `RAPPORT_NUIT.md` (ARCEP, budget, R&D).
-1. Gouvernance WGI (6 indicateurs, base 3 de l'API World Bank) sur la page Investir.
-2. Accès API ODFA (identifiants) pour collecter les valeurs ; humaniser les titres des jeux (slugs).
-3. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
-4. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
-5. Doc dbt en ligne sur GitHub Pages (https://yann2808.github.io/benin-open-data-hub/) : dans `refresh.yml`,
+0. Décisions de `RAPPORT_NUIT.md`, section 4 : demandes de licence ARCEP, budget DGB et IGN (débloquent la carte
+   par commune), affichage de la R&D.
+1. Accès API ODFA (identifiants `ODFA_APP_ID` / `ODFA_APP_SECRET`) pour collecter les valeurs.
+2. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
+3. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
+4. Doc dbt en ligne sur GitHub Pages (https://yann2808.github.io/benin-open-data-hub/) : dans `refresh.yml`,
    après `dbt build`, `dbt docs generate --static` (→ `target/static_index.html`), puis `upload-pages-artifact`
    + `deploy-pages`, sur `main` seulement. Prérequis : Pages activé avec « GitHub Actions » comme source
    (accord de Yann, c'est une mise en ligne). Puis lien dans le README et la page Méthode. Publie la structure
    (modèles, SQL, tests), pas les valeurs. Branche et PR dédiées.
+5. Pistes proposées le 2026-11-02, pas encore lancées : indicateurs santé (`SH.DYN.MORT`, `SH.STA.MMRT`,
+   `SH.XPD.CHEX.GD.ZS`), pauvreté et inégalités (`SI.POV.DDAY`, `SI.POV.GINI`), genre, climat ; bandeau
+   « Quoi de neuf cette semaine » ; historique du baromètre d'accès ; fiche pays téléchargeable.
 
 ## Conventions
 - Code et commentaires en français, noms de variables en anglais.

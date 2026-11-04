@@ -4,5 +4,7 @@ select
     theme,
     unit_fr,
     try_cast(higher_is_better as boolean) as higher_is_better,
-    coalesce(section, 'tableau de bord') as section
+    coalesce(section, 'tableau de bord') as section,
+    coalesce(source_db, 'wdi') as source_db,
+    definition_fr
 from {{ source('raw', 'wb_indicator_catalog') }}
