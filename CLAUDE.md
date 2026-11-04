@@ -81,30 +81,36 @@ La doc dbt n'est pas encore en ligne (voir Prochaines étapes).
   Déjà géré par un marqueur dans `requirements.txt` ; installer avec `pip install --prefer-binary`.
 - Le Python système (`python3` de macOS) est trop ancien : ne pas l'utiliser.
 
-## État au 2026-10-21
-- ⏳ Branche `nightly/2026-10-21` (mission de nuit) : baromètre d'accès, définitions, âge ODFA, audit des sources,
-  ODIN, GBIF, HDX, exports CSV, modèle d'issue. PR ouverte, à relire ; voir `RAPPORT_NUIT.md`.
-- ❌ data.gouv.bj : le domaine ne résout plus en DNS au 2026-10-20.
-- ✅ Dépôt public https://github.com/Yann2808/benin-open-data-hub (PR #1 mergée : ODFA + refonte du dashboard).
-- ✅ Onglet « Investir au Bénin » en ligne (PR #5 ; la PR #4 visait la mauvaise branche). Refresh du 2026-10-19 :
-  23 indicateurs (12 tableau de bord + 11 investir), 4 105 valeurs dans les exports.
+## État au 2026-11-04
 - ✅ Dashboard public : https://bj-odh.streamlit.app/ (Streamlit Community Cloud, branche `main`,
   fichier `app/streamlit_app.py`, visibilité publique). Redéploiement automatique à chaque commit sur `main`.
-- ✅ Collecte World Bank réelle OK (jusqu'à 2025), dbt OK.
+- ✅ Dépôt public https://github.com/Yann2808/benin-open-data-hub. PR mergées : #1 (ODFA, dashboard),
+  #5 (Investir ; la #4 visait la mauvaise branche), #7 (mission de nuit du 2026-10-21 : baromètre d'accès,
+  définitions, âge ODFA, audit, ODIN, GBIF, HDX, exports CSV), #8 à #10 (navigation par pages, parcours,
+  graphiques Altair : mobile et accessibilité), #11 (`make docs` sur le port 8081), #12 (cache invalidé à chaque refresh).
+- ⏳ PR #13 : gouvernance WGI sur la page Investir. Après le merge : `gh workflow run refresh.yml`, sinon la
+  section reste masquée en ligne jusqu'au lundi suivant.
+- ✅ Collecte hebdomadaire OK (2026-10-26, 2026-11-02) : 25 indicateurs WDI, 4 364 valeurs dans les exports.
+  Avec les 6 WGI (collecte locale du 2026-11-04) : 31 indicateurs, 5 414 valeurs.
 - ✅ Catalogue ODFA : 1 107 jeux inventoriés ; ❌ valeurs non collectées (403 Cloudflare, voir plus haut).
-- ❌ INStaD (nada.instad.bj) : tout le site en maintenance (404/503) au 2026-10-12. Source optionnelle, on attend.
+- ❌ INStaD (nada.instad.bj) : 404 à chaque test du baromètre depuis le 2026-10-12 (dernier : 2026-11-02).
+- ❌ data.gouv.bj : le domaine ne résout plus en DNS depuis le 2026-10-20 (dernier test : 2026-11-04).
+- ⏳ `RAPPORT_NUIT.md` (non versionné) : décisions encore en attente (ARCEP, budget DGB, IGN, R&D, ODIN, HDX).
 
 ## Prochaines étapes
-0. Relire et fusionner la PR de la nuit ; décisions en attente dans `RAPPORT_NUIT.md` (ARCEP, budget, R&D).
-1. Gouvernance WGI (6 indicateurs, base 3 de l'API World Bank) sur la page Investir.
-2. Accès API ODFA (identifiants) pour collecter les valeurs ; humaniser les titres des jeux (slugs).
-3. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
-4. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
-5. Doc dbt en ligne sur GitHub Pages (https://yann2808.github.io/benin-open-data-hub/) : dans `refresh.yml`,
+0. Décisions de `RAPPORT_NUIT.md`, section 4 : demandes de licence ARCEP, budget DGB et IGN (débloquent la carte
+   par commune), affichage de la R&D.
+1. Accès API ODFA (identifiants `ODFA_APP_ID` / `ODFA_APP_SECRET`) pour collecter les valeurs.
+2. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
+3. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
+4. Doc dbt en ligne sur GitHub Pages (https://yann2808.github.io/benin-open-data-hub/) : dans `refresh.yml`,
    après `dbt build`, `dbt docs generate --static` (→ `target/static_index.html`), puis `upload-pages-artifact`
    + `deploy-pages`, sur `main` seulement. Prérequis : Pages activé avec « GitHub Actions » comme source
    (accord de Yann, c'est une mise en ligne). Puis lien dans le README et la page Méthode. Publie la structure
    (modèles, SQL, tests), pas les valeurs. Branche et PR dédiées.
+5. Pistes proposées le 2026-11-02, pas encore lancées : indicateurs santé (`SH.DYN.MORT`, `SH.STA.MMRT`,
+   `SH.XPD.CHEX.GD.ZS`), pauvreté et inégalités (`SI.POV.DDAY`, `SI.POV.GINI`), genre, climat ; bandeau
+   « Quoi de neuf cette semaine » ; historique du baromètre d'accès ; fiche pays téléchargeable.
 
 ## Conventions
 - Code et commentaires en français, noms de variables en anglais.
