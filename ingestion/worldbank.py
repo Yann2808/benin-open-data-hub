@@ -72,6 +72,9 @@ def fetch_all(cfg: dict[str, Any], client: HttpClient | None = None) -> list[dic
 # Où l'indicateur s'affiche : tableau de bord général, ou onglet « Investir au Bénin »
 DEFAULT_SECTION = "tableau de bord"
 SECTIONS = (DEFAULT_SECTION, "investir")
+# Base de la World Bank d'où vient l'indicateur (même API, sites et définitions différents)
+DEFAULT_SOURCE = "wdi"
+SOURCES = (DEFAULT_SOURCE, "wgi")
 
 
 def indicator_catalog(cfg: dict[str, Any]) -> list[dict[str, Any]]:
@@ -84,12 +87,15 @@ def indicator_catalog(cfg: dict[str, Any]) -> list[dict[str, Any]]:
             "unit_fr": i["unit"],
             "higher_is_better": None if i.get("higher_is_better") is None else str(i["higher_is_better"]).lower(),
             "section": i.get("section", DEFAULT_SECTION),
+            "source_db": i.get("source", DEFAULT_SOURCE),
+            "definition_fr": i.get("definition"),
         }
         for i in cfg["indicators"]
     ]
 
 
-CATALOG_COLUMNS = ["indicator_code", "label_fr", "theme", "unit_fr", "higher_is_better", "section"]
+CATALOG_COLUMNS = ["indicator_code", "label_fr", "theme", "unit_fr", "higher_is_better", "section", "source_db",
+                   "definition_fr"]
 
 
 # --- Métadonnées des indicateurs (définition officielle, organisme producteur) ----------

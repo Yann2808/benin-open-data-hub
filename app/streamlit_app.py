@@ -41,6 +41,7 @@ THEMES = {
     "Infrastructures": ":material/bolt:",
     "Emploi": ":material/work:",
     "Finance et investissement": ":material/account_balance:",
+    "Gouvernance": ":material/gavel:",
 }
 # Pays frontaliers du Bénin (marché accessible par la route depuis Cotonou)
 BORDERS = ["TGO", "NGA", "NER", "BFA"]
@@ -292,9 +293,13 @@ def source_line(code: str) -> str:
 def definition_text(code: str) -> str:
     """Définition telle que publiée par la source (souvent en anglais), sinon le dire."""
     definition = INDICATOR_META.loc[code, "definition"]
-    if pd.isna(definition):
-        return "Définition non disponible : métadonnées de la source pas encore collectées (`make run`)."
-    return f"Définition de la source : {definition}"
+    if pd.notna(definition):
+        return f"Définition de la source : {definition}"
+    # WGI : l'API ne publie pas de définition, le hub en rédige une (config/sources.yml)
+    own = INDICATOR_META.loc[code].get("definition_fr")
+    if pd.notna(own):
+        return f"Définition rédigée par le hub d'après la documentation de la source : {own}"
+    return "Définition non disponible : métadonnées de la source pas encore collectées (`make run`)."
 
 
 def definition_md(code: str) -> str:
@@ -359,7 +364,7 @@ def country_profile(iso: str) -> pd.DataFrame:
             "baseline_year": row.baseline_year if row is not None else None,
             "change_abs": row.change_abs if row is not None else None,
             "change_pct": row.change_pct if row is not None else None,
-            "change_in_points": "%" in ind.unit_fr, "peer_median": median,
+            "change_in_points": "%" in ind.unit_fr or ind.unit_fr.startswith("score"), "peer_median": median,
             "rank_among_peers": rank, "n_countries_compared": len(comp),
             "position_vs_peers": position,
             "is_stale": value is not None and pd.notna(value) and iso not in set(comp.country_iso3),
@@ -661,9 +666,10 @@ def page_country() -> None:
 def page_invest() -> None:
     st.space("small")
     st.markdown(
-        f"Trois questions qu'un entrepreneur ou un investisseur se pose avant de s'installer au {focus_name}, "
+        f"Quatre questions qu'un entrepreneur ou un investisseur se pose avant de s'installer au {focus_name}, "
         f"avec les données de la World Bank et la comparaison aux {len(peer_isos)} voisins : **quelle taille "
-        "de marché**, **quelle stabilité**, **quel accès au financement et à l'international**."
+        "de marché**, **quelle stabilité**, **quel accès au financement et à l'international**, "
+        "**quelle gouvernance**."
     )
     invest_codes = set(indicators.loc[indicators.section == "investir", "indicator_code"])
     all_series = query(
@@ -885,17 +891,44 @@ def page_invest() -> None:
                        "d'une année sur l'autre. IDE : investissements directs étrangers. Crédit au secteur privé : "
                        "prêts des banques aux entreprises et aux ménages.")
 
+        # --- 4. Gouvernance (WGI) ---
+        gov_codes = list(indicators.loc[(indicators.section == "investir") & (indicators.theme == "Gouvernance"),
+                                        "indicator_code"])
+        gov_labels = indicators.set_index("indicator_code").label_fr.reindex(gov_codes)
+        gov_latest = latest[latest.indicator_code.isin(gov_codes)]
+        if len(gov_latest):
+            st.space("small")
+            st.subheader("4. La gouvernance")
+            st.caption("Les règles sont-elles appliquées ? Les contrats respectés ? La corruption contenue ? "
+                       "Six scores de 0 à 100 de la Banque mondiale (plus haut = mieux).")
+            indicator_cards(invest_rows[invest_rows.indicator_code.isin(gov_codes)], focus_series,
+                            "médiane des voisins")
+            with st.container(border=True):
+                gov_pick = st.segmented_control("Comparer les 7 pays sur", gov_codes, format_func=gov_labels.get,
+                                                default=gov_codes[0], required=True, key="invest_gov_pick")
+                gov = gov_latest[gov_latest.indicator_code == gov_pick].sort_values("latest_value")
+                gov_year = int(gov.latest_year.max())
+                bars = pd.DataFrame({"label": [names[i] for i in gov.country_iso3], "value": gov.latest_value.values,
+                                     "color": [COLORS[i] for i in gov.country_iso3],
+                                     "text": [f"{v:.0f}" for v in gov.latest_value]})
+                show_chart(charts.hbars(bars, value_title=f"Score de 0 à 100 ({gov_year})", right=60),
+                           f"{gov_labels[gov_pick]} : score de 0 à 100 des 7 pays en {gov_year}.")
+                st.caption(
+                    "Ces scores agrègent des enquêtes et avis d'experts : ils mesurent des **perceptions**, avec une "
+                    "marge d'erreur publiée par la Banque mondiale. Quelques points d'écart entre deux pays ne "
+                    "suffisent pas à les départager ; la tendance sur plusieurs années est plus parlante."
+                )
         st.info(
-            "**Pour aller plus loin.** Les indicateurs de gouvernance de la Banque mondiale (qualité de la "
-            "réglementation, État de droit, stabilité politique) seront ajoutés prochainement. Le classement "
-            "*Doing Business* n'est pas utilisé : la Banque mondiale l'a arrêté en 2021 après des irrégularités.",
+            "Le classement *Doing Business* n'est pas utilisé : la Banque mondiale l'a arrêté en 2021 après des "
+            "irrégularités. Les indicateurs de gouvernance (WGI) en prennent ici le relais.",
             icon=":material/lightbulb:",
         )
         with st.expander("Définitions des indicateurs de cette page", icon=":material/menu_book:"):
             for code in indicators.loc[indicators.section == "investir", "indicator_code"]:
                 st.markdown(definition_md(code))
         st.caption("Ces analyses éclairent une décision à partir de statistiques publiques ; elles ne constituent "
-                   "pas un conseil en investissement. Source : World Bank, World Development Indicators.")
+                   "pas un conseil en investissement. Sources : World Bank, World Development Indicators et "
+                   "Worldwide Governance Indicators.")
 
 # --- Comparer ----------------------------------------------------------------
 def page_compare() -> None:

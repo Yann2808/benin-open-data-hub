@@ -7,7 +7,7 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 
 ## Architecture
 - `ingestion/` (Python) → DuckDB `warehouse/benin.duckdb`, schéma `raw.*` (tout en varchar)
-  - `worldbank.py` : API World Bank v2, 25 indicateurs × 7 pays × 2000-2025. **Source indispensable.**
+  - `worldbank.py` : API World Bank v2, 31 indicateurs × 7 pays × 2000-2025 (25 WDI + 6 WGI, même adresse). **Source indispensable.**
     Définitions officielles via `/v2/fr/indicator` (repli sur l'anglais si la traduction est vide) → `raw.wb_indicator_meta`.
   - `nada.py` : catalogue INStaD (nada.instad.bj). **Source optionnelle** : un échec ne bloque pas le pipeline.
   - `odfa.py` : portail Open Data for Africa — Bénin (Knoema, BAD) via son API. `make run` rafraîchit le catalogue,
@@ -30,14 +30,17 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 - `transform/` (dbt-duckdb) : staging (vues) → marts (tables) : dim_country, dim_indicator,
   fct_indicator_values (avec `collection_status` collectée/démo), mart_latest_values, mart_benin_scorecard,
   mart_data_catalog (types : indicateur, enquête, fichier déposé, jeu de données, source référencée), mart_odfa_datasets,
-  mart_source_availability, mart_odin_scores, mart_gbif_yearly. 51 tests dbt, 60 tests pytest (dont deux tests
+  mart_source_availability, mart_odin_scores, mart_gbif_yearly. 53 tests dbt, 62 tests pytest (dont deux tests
   de l'app avec `AppTest`).
 - `app/streamlit_app.py` : 8 pages `st.navigation` (menu en haut, replié dans un menu latéral sur téléphone ; adresses `/fiche-pays`, `/investir`, etc.) : Tableau de bord, Fiche pays, Investir au Bénin, Comparer, Open Data for Africa,
   Catalogue, Accès aux données, Méthode. Une fonction `page_*` par page, routeur en fin de fichier ; le test de fumée les ouvre toutes. Définition, unité, année et source à côté de chaque chiffre (`definition_md`,
   `source_line`). Abonnements (« pour 100 habitants ») et personnes (« % de la population ») jamais confondus :
   `tests/test_labels.py` le vérifie. Investir : marché (zones Bénin / + frontaliers / + reste du hub), structure de l'économie,
   stabilité sur 10 ans (moyenne et écart-type croissance/inflation, monnaie base 100 en 2015), crédit, IDE, ouverture.
-  Pas de Doing Business (arrêté en 2021) ; gouvernance WGI prévue (autre base de l'API World Bank, source 3).
+  gouvernance (6 scores WGI de 0 à 100, section 4, masquée tant que les exports ne les contiennent pas).
+  Pas de Doing Business (arrêté en 2021). WGI : l'API ne publie pas de définition → champ `definition` dans
+  `config/sources.yml` (« rédigée par le hub »), champ `source: wgi` pour le nom et le lien de la source
+  (`dim_indicator.source_db`). Un score sur 100 évolue en points, comme un % (`change_in_points`, SQL et pandas).
   Fiche pays : `country_profile()` refait en pandas le calcul de `mart_benin_scorecard` pour n'importe quel pays
   (à garder aligné avec le SQL) ; sélecteur lié à l'URL (`?pays=Togo`, libellé du pays).
   `app/odfa_catalog.py` : titres ODFA lisibles depuis les slugs, thème estimé par mots-clés, famille de producteur,
