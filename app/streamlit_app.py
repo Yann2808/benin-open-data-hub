@@ -127,13 +127,25 @@ def connect() -> duckdb.DuckDBPyConnection:
     return con
 
 
+def data_version() -> tuple:
+    """Empreinte des données lues (nom, date de modification, taille) : elle change à chaque
+    refresh, ce qui invalide le cache de query() sans attendre l'expiration d'une heure."""
+    files = [WAREHOUSE] if WAREHOUSE.exists() else sorted(EXPORTS.glob("*.parquet"))
+    return tuple((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in files)
+
+
 @st.cache_data(ttl=3600)
-def query(sql: str, params: tuple = ()) -> pd.DataFrame:
+def _cached_query(sql: str, params: tuple, version: tuple) -> pd.DataFrame:
     con = connect()
     try:
         return con.execute(sql, list(params)).df()
     finally:
         con.close()
+
+
+def query(sql: str, params: tuple = ()) -> pd.DataFrame:
+    # La version fait partie de la clé du cache : de nouvelles données donnent une nouvelle entrée.
+    return _cached_query(sql, params, data_version())
 
 
 def fmt(value: float | None, unit: str) -> str:

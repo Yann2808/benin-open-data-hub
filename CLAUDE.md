@@ -46,8 +46,8 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
   `app/odfa_catalog.py` : titres ODFA lisibles depuis les slugs, thème estimé par mots-clés, famille de producteur,
   âge des jeux (`update_period`, `age_table`).
   Lit DuckDB en local, ou `exports/*.parquet` une fois hébergé. Streamlit ≥ 1.50 (metrics avec sparklines, badges).
-  `query()` est en `@st.cache_data(ttl=3600)` : après un commit d'exports, l'app en ligne garde les anciennes
-  données jusqu'à 1 h (redéployer le code ne vide pas ce cache). Pour forcer : « Reboot app » sur share.streamlit.io.
+  `query()` passe par un cache (`_cached_query`, ttl 1 h) dont la clé inclut `data_version()` (nom, date et taille
+  de l'entrepôt ou des `exports/*.parquet`) : un refresh est visible dès le chargement suivant, sans « Reboot app ».
   Thème dans `.streamlit/config.toml` (vert Bénin `#0F7B4B`, Inter / Space Grotesk, clair imposé).
   Couleurs des pays attribuées par code ISO, jamais par rang : le Bénin en vert, chaque voisin sa couleur.
   Graphiques : **Altair** via `app/charts.py` (`hbars`, `vbars`, `stacked_hbars`, `lines`, `position_strip`,
@@ -69,7 +69,9 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 
 ## Commandes
 `make venv` · `make install` · `make demo` (données synthétiques) · `make run` · `make transform` ·
-`make app` · `make test` · `make diagnose`. Le Makefile utilise `.venv/` même non activé.
+`make app` · `make test` · `make docs` · `make diagnose`. Le Makefile utilise `.venv/` même non activé.
+`make docs` sert la doc dbt sur le port 8081 (`DOCS_PORT`) : 8080 est pris par Jenkins sur le Mac de Yann.
+La doc dbt n'est pas encore en ligne (voir Prochaines étapes).
 
 ## Environnement de Yann (important)
 - MacBook Pro **Intel x86_64**, macOS ancien (≤ 11). Conda installé avec `(base)` actif par défaut.
@@ -94,11 +96,15 @@ Objectif : projet vitrine « data product », contribution à l'écosystème dat
 
 ## Prochaines étapes
 0. Relire et fusionner la PR de la nuit ; décisions en attente dans `RAPPORT_NUIT.md` (ARCEP, budget, R&D).
-1. Cache de l'app : ajouter la date de modification de `exports/*.parquet` à la clé de `query()`, pour que
-   chaque refresh soit visible tout de suite.
+1. Gouvernance WGI (6 indicateurs, base 3 de l'API World Bank) sur la page Investir.
 2. Accès API ODFA (identifiants) pour collecter les valeurs ; humaniser les titres des jeux (slugs).
 3. Revérifier l'API INStaD quand le site sera revenu (`make diagnose`).
 4. v0.2 : premiers jeux data.gouv.bj (éducation, santé), carte par commune.
+5. Doc dbt en ligne sur GitHub Pages (https://yann2808.github.io/benin-open-data-hub/) : dans `refresh.yml`,
+   après `dbt build`, `dbt docs generate --static` (→ `target/static_index.html`), puis `upload-pages-artifact`
+   + `deploy-pages`, sur `main` seulement. Prérequis : Pages activé avec « GitHub Actions » comme source
+   (accord de Yann, c'est une mise en ligne). Puis lien dans le README et la page Méthode. Publie la structure
+   (modèles, SQL, tests), pas les valeurs. Branche et PR dédiées.
 
 ## Conventions
 - Code et commentaires en français, noms de variables en anglais.

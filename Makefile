@@ -6,6 +6,8 @@ PY   ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 DBT  ?= $(if $(wildcard $(VENV)/bin/dbt),$(VENV)/bin/dbt,dbt)
 STREAMLIT ?= $(if $(wildcard $(VENV)/bin/streamlit),$(VENV)/bin/streamlit,streamlit)
 DBT_RUN = cd transform && $(DBT)
+# 8080 (défaut de dbt) est souvent déjà pris (Jenkins…) : `make docs DOCS_PORT=8090` pour changer.
+DOCS_PORT ?= 8081
 
 .PHONY: venv install demo run ingest odfa transform test app docs diagnose clean
 
@@ -42,7 +44,7 @@ app:                ## Lance le dashboard
 	$(STREAMLIT) run app/streamlit_app.py
 
 docs:               ## Documentation dbt (lignage, descriptions)
-	$(DBT_RUN) docs generate --profiles-dir . && $(DBT) docs serve --profiles-dir .
+	$(DBT_RUN) docs generate --profiles-dir . && $(DBT) docs serve --profiles-dir . --port $(DOCS_PORT)
 
 diagnose:           ## Diagnostic à copier en cas de problème
 	@$(PY) scripts/diagnose.py
