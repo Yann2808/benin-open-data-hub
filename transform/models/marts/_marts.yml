@@ -25,6 +25,13 @@ models:
           - accepted_values:
               arguments:
                 values: ['tableau de bord', 'investir']
+      - name: source_db
+        description: Base World Bank d'origine (wdi ou wgi), qui fixe le nom et le lien de la source affichés.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['wdi', 'wgi']
 
   - name: fct_indicator_values
     description: Une ligne par indicateur × pays × année (valeurs renseignées uniquement).

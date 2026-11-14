@@ -72,6 +72,22 @@ def test_config_sections_are_known():
     assert sections <= set(worldbank.SECTIONS)
 
 
+def test_indicator_catalog_source_defaults_to_wdi():
+    row = worldbank.indicator_catalog(WB_CFG)[0]
+    assert row["source_db"] == worldbank.DEFAULT_SOURCE and row["definition_fr"] is None
+    assert set(row) == set(worldbank.CATALOG_COLUMNS)
+
+
+def test_config_wgi_indicators_have_definition():
+    import yaml
+    cfg = yaml.safe_load((FIX.parents[1] / "config" / "sources.yml").read_text(encoding="utf-8"))
+    indicators = cfg["worldbank"]["indicators"]
+    assert {i.get("source", worldbank.DEFAULT_SOURCE) for i in indicators} <= set(worldbank.SOURCES)
+    # L'API ne publie aucune définition des WGI : le hub doit fournir la sienne
+    wgi = [i for i in indicators if i.get("source") == "wgi"]
+    assert len(wgi) == 6 and all(i.get("definition") for i in wgi)
+
+
 NADA_CFG = {"site_root": "https://nada.instad.bj", "page_size": 100}
 
 

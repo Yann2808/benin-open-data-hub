@@ -13,6 +13,9 @@ worldbank:
   # higher_is_better sert au classement Bénin vs pairs (null = pas de classement).
   # section : « tableau de bord » (défaut) ou « investir » (onglet Investir au Bénin uniquement,
   # disponible aussi dans Comparer).
+  # source : « wdi » (défaut, World Development Indicators) ou « wgi » (Worldwide Governance Indicators,
+  # même API). definition : définition en français rédigée par le hub, affichée seulement quand l'API
+  # n'en publie pas (cas des WGI).
   indicators:
     - code: SP.POP.TOTL
       label: Population totale
@@ -161,6 +164,54 @@ worldbank:
       unit: "% du PIB"
       higher_is_better: null
       section: investir
+    - code: GOV_WGI_VA.SC
+      label: Voix citoyenne et responsabilité
+      theme: Gouvernance
+      unit: score de 0 à 100
+      higher_is_better: true
+      section: investir
+      source: wgi
+      definition: "Perception de la mesure dans laquelle les citoyens peuvent participer au choix de leur gouvernement, et de la liberté d'expression, d'association et de la presse."
+    - code: GOV_WGI_PV.SC
+      label: Stabilité politique et absence de violence
+      theme: Gouvernance
+      unit: score de 0 à 100
+      higher_is_better: true
+      section: investir
+      source: wgi
+      definition: "Perception du risque d'instabilité politique et de violences à motivation politique, terrorisme compris."
+    - code: GOV_WGI_GE.SC
+      label: Efficacité des pouvoirs publics
+      theme: Gouvernance
+      unit: score de 0 à 100
+      higher_is_better: true
+      section: investir
+      source: wgi
+      definition: "Perception de la qualité des services publics et de l'administration, de son indépendance face aux pressions politiques, et de la crédibilité des politiques menées."
+    - code: GOV_WGI_RQ.SC
+      label: Qualité de la réglementation
+      theme: Gouvernance
+      unit: score de 0 à 100
+      higher_is_better: true
+      section: investir
+      source: wgi
+      definition: "Perception de la capacité de l'État à concevoir et appliquer des règles qui permettent le développement du secteur privé."
+    - code: GOV_WGI_RL.SC
+      label: État de droit
+      theme: Gouvernance
+      unit: score de 0 à 100
+      higher_is_better: true
+      section: investir
+      source: wgi
+      definition: "Perception de la confiance dans les règles de la société et de leur respect : exécution des contrats, droits de propriété, police, tribunaux, risque de criminalité."
+    - code: GOV_WGI_CC.SC
+      label: Maîtrise de la corruption
+      theme: Gouvernance
+      unit: score de 0 à 100
+      higher_is_better: true
+      section: investir
+      source: wgi
+      definition: "Perception de l'usage du pouvoir public à des fins privées (petite et grande corruption) et de la captation de l'État par des intérêts privés."
 
 nada:
   # Catalogue de microdonnées de l'INStaD (plateforme NADA).

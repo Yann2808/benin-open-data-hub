@@ -54,9 +54,9 @@ select
     f.baseline_year,
     f.change_abs,
     f.change_pct,
-    -- Pour un indicateur déjà en %, l'évolution se lit en points, pas en % relatif
+    -- Pour un indicateur déjà en % (ou un score sur 100), l'évolution se lit en points, pas en % relatif
     -- (passer de 2 % à 4 % de chômage = +2 points, pas +100 %).
-    strpos(i.unit_fr, '%') > 0 as change_in_points,
+    strpos(i.unit_fr, '%') > 0 or starts_with(i.unit_fr, 'score') as change_in_points,
     p.peer_median,
     p.peer_min,
     p.peer_max,

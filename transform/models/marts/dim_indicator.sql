@@ -20,8 +20,17 @@ select
     m.definition,
     m.source_organization,
     e.source_published_on,
-    'World Bank — World Development Indicators'                        as source_name,
-    'https://data.worldbank.org/indicator/' || c.indicator_code         as source_url
+    c.source_db,
+    -- Définition en français rédigée par le hub, pour les indicateurs dont l'API n'en publie pas (WGI)
+    c.definition_fr,
+    case c.source_db
+        when 'wgi' then 'World Bank — Worldwide Governance Indicators'
+        else 'World Bank — World Development Indicators'
+    end                                                                 as source_name,
+    case c.source_db
+        when 'wgi' then 'https://www.worldbank.org/en/publication/worldwide-governance-indicators'
+        else 'https://data.worldbank.org/indicator/' || c.indicator_code
+    end                                                                 as source_url
 from {{ ref('stg_indicator_catalog') }} c
 left join en_names e using (indicator_code)
 left join {{ ref('stg_wb_indicator_meta') }} m using (indicator_code)
